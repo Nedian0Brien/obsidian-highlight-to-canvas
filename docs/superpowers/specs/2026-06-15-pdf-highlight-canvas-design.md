@@ -1,7 +1,7 @@
 # PDF Highlight to Canvas Obsidian Plugin Design
 
 Date: 2026-06-15
-Status: Draft pending written-spec review
+Status: Approved for implementation planning
 
 ## Summary
 

@@ -1,0 +1,2415 @@
+# PDF Highlight Canvas Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Build an Obsidian plugin MVP that opens Vault PDFs in a dedicated reader, captures selected text, writes a real PDF highlight annotation, creates a JSON Canvas text node, and stores source-return metadata in a plugin index.
+
+**Architecture:** The plugin is split into small modules: settings and shared types, JSON Canvas writing, highlight index storage, PDF selection capture, PDF annotation writing, reader UI, and orchestration commands. Pure data modules are implemented with Vitest first, then Obsidian-facing view and command modules wire those units together.
+
+**Tech Stack:** TypeScript, Obsidian plugin API, esbuild, Vitest, PDF.js for rendering/text extraction, pdf-lib for PDF annotation writing, JSON Canvas `.canvas` files.
+
+---
+
+## Source Spec
+
+- `docs/superpowers/specs/2026-06-15-pdf-highlight-canvas-design.md`
+
+## File Structure
+
+- `package.json`: npm scripts, runtime dependencies, and dev dependencies.
+- `tsconfig.json`: TypeScript compiler settings for Obsidian and tests.
+- `esbuild.config.mjs`: production and development bundle config.
+- `manifest.json`: Obsidian plugin manifest.
+- `versions.json`: Obsidian plugin compatibility map.
+- `src/main.ts`: plugin entrypoint, view registration, extension registration, settings, and commands.
+- `src/types.ts`: shared data types for categories, rectangles, Canvas nodes, settings, and highlight records.
+- `src/settings.ts`: default settings, settings normalization, and settings tab UI.
+- `src/canvas/canvasTypes.ts`: JSON Canvas TypeScript types.
+- `src/canvas/canvasNodeWriter.ts`: parse, create, place, and update `.canvas` files.
+- `src/index/highlightIndex.ts`: JSON index store with insert, lookup, export, import, and migration.
+- `src/pdf/highlightCapture.ts`: DOM selection to normalized PDF highlight metadata.
+- `src/pdf/pdfAnnotationWriter.ts`: real highlight annotation writer using pdf-lib.
+- `src/pdf/pdfReaderView.ts`: dedicated Obsidian PDF reader view using PDF.js.
+- `src/pdf/highlightPopover.ts`: compact and advanced creation popover.
+- `src/highlights/createHighlightFlow.ts`: strict PDF annotation -> Canvas node -> index orchestration.
+- `src/commands.ts`: command registration and command helpers.
+- `src/obsidian/indexMaintenance.ts`: repair, export, and import helpers for plugin index management.
+- `src/utils/id.ts`: stable ID helpers.
+- `src/utils/path.ts`: Vault path helpers.
+- `src/styles.css`: reader, text layer, popover, and emphasis styling.
+- `tests/**/*.test.ts`: unit and integration-style tests that run in Node/Vitest.
+- `tests/fixtures/sampleText.pdf`: generated test PDF used by annotation tests.
+
+## Task 1: Scaffold Obsidian Plugin Project
+
+**Files:**
+- Create: `package.json`
+- Create: `tsconfig.json`
+- Create: `esbuild.config.mjs`
+- Create: `manifest.json`
+- Create: `versions.json`
+- Create: `src/main.ts`
+- Create: `src/styles.css`
+
+- [ ] **Step 1: Create package metadata and scripts**
+
+Create `package.json` with this content:
+
+```json
+{
+  "name": "pdf-highlight-canvas",
+  "version": "0.1.0",
+  "description": "Create Obsidian Canvas nodes from live PDF highlights.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs --watch",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -noEmit -skipLibCheck"
+  },
+  "keywords": [
+    "obsidian",
+    "pdf",
+    "canvas",
+    "highlight"
+  ],
+  "author": "Minjae Park",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.21.5",
+    "obsidian": "^1.5.12",
+    "tslib": "^2.6.3",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.4.168"
+  }
+}
+```
+
+- [ ] **Step 2: Create TypeScript config**
+
+Create `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "inlineSourceMap": true,
+    "inlineSources": true,
+    "module": "ESNext",
+    "target": "ES2020",
+    "allowJs": false,
+    "noImplicitAny": true,
+    "moduleResolution": "Bundler",
+    "importHelpers": true,
+    "isolatedModules": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "lib": ["DOM", "ES2020"],
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}
+```
+
+- [ ] **Step 3: Create esbuild config**
+
+Create `esbuild.config.mjs`:
+
+```js
+import esbuild from "esbuild";
+import process from "process";
+import builtins from "builtin-modules";
+
+const banner = `/*
+THIS IS A GENERATED/BUNDLED FILE BY ESBUILD
+*/`;
+
+const prod = process.argv[2] === "production";
+const watch = process.argv.includes("--watch");
+
+const context = await esbuild.context({
+  banner: { js: banner },
+  entryPoints: ["src/main.ts"],
+  bundle: true,
+  external: [
+    "obsidian",
+    "electron",
+    "@codemirror/autocomplete",
+    "@codemirror/collab",
+    "@codemirror/commands",
+    "@codemirror/language",
+    "@codemirror/lint",
+    "@codemirror/search",
+    "@codemirror/state",
+    "@codemirror/view",
+    "@lezer/common",
+    "@lezer/highlight",
+    "@lezer/lr",
+    ...builtins
+  ],
+  format: "cjs",
+  target: "es2020",
+  logLevel: "info",
+  sourcemap: prod ? false : "inline",
+  treeShaking: true,
+  outfile: "main.js"
+});
+
+if (watch) {
+  await context.watch();
+  console.log("Watching for changes...");
+} else {
+  await context.rebuild();
+  await context.dispose();
+}
+```
+
+- [ ] **Step 4: Create Obsidian manifest files**
+
+Create `manifest.json`:
+
+```json
+{
+  "id": "pdf-highlight-canvas",
+  "name": "PDF Highlight Canvas",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Create Canvas text nodes from live PDF highlights.",
+  "author": "Minjae Park",
+  "authorUrl": "",
+  "isDesktopOnly": true
+}
+```
+
+Create `versions.json`:
+
+```json
+{
+  "0.1.0": "1.5.0"
+}
+```
+
+- [ ] **Step 5: Create minimal plugin entrypoint**
+
+Create `src/main.ts`:
+
+```ts
+import { Plugin } from "obsidian";
+
+export default class PdfHighlightCanvasPlugin extends Plugin {
+  async onload(): Promise<void> {
+    this.addCommand({
+      id: "open-pdf-highlight-reader",
+      name: "Open current PDF in PDF Highlight Reader",
+      callback: () => {
+        console.log("PDF Highlight Canvas command registered");
+      }
+    });
+  }
+}
+```
+
+Create `src/styles.css`:
+
+```css
+.pdf-highlight-canvas-reader {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+```
+
+- [ ] **Step 6: Install dependencies**
+
+Run:
+
+```bash
+npm install
+```
+
+Expected: npm creates `package-lock.json` and installs dependencies without fatal errors.
+
+- [ ] **Step 7: Verify scaffold build**
+
+Run:
+
+```bash
+npm run build
+```
+
+Expected: `main.js` is generated and `tsc` reports no type errors.
+
+- [ ] **Step 8: Commit scaffold**
+
+Run:
+
+```bash
+git add package.json package-lock.json tsconfig.json esbuild.config.mjs manifest.json versions.json src/main.ts src/styles.css
+git commit -m "chore: scaffold Obsidian plugin"
+```
+
+Expected: commit succeeds.
+
+## Task 2: Define Shared Types and Settings
+
+**Files:**
+- Create: `src/types.ts`
+- Create: `src/settings.ts`
+- Create: `tests/settings.test.ts`
+- Modify: `src/main.ts`
+
+- [ ] **Step 1: Write settings tests**
+
+Create `tests/settings.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { DEFAULT_SETTINGS, normalizeSettings } from "../src/settings";
+
+describe("settings", () => {
+  it("provides the approved default reader and canvas settings", () => {
+    expect(DEFAULT_SETTINGS.useReaderForVaultPdfs).toBe(true);
+    expect(DEFAULT_SETTINGS.defaultCanvasStrategy).toBe("pdf-specific");
+    expect(DEFAULT_SETTINGS.defaultNodeWidth).toBe(420);
+    expect(DEFAULT_SETTINGS.pageZoneSpacing).toBe(720);
+    expect(DEFAULT_SETTINGS.sourceEmphasisDurationMs).toBe(1600);
+  });
+
+  it("normalizes partial saved data without losing category presets", () => {
+    const settings = normalizeSettings({
+      useReaderForVaultPdfs: false,
+      categories: [{ id: "custom", label: "Custom", color: "#00ff00", defaultTags: ["x"] }]
+    });
+
+    expect(settings.useReaderForVaultPdfs).toBe(false);
+    expect(settings.categories).toHaveLength(1);
+    expect(settings.categories[0].id).toBe("custom");
+    expect(settings.defaultCategoryId).toBe("custom");
+  });
+});
+```
+
+- [ ] **Step 2: Run settings tests to verify failure**
+
+Run:
+
+```bash
+npm test -- tests/settings.test.ts
+```
+
+Expected: FAIL because `src/settings.ts` does not exist.
+
+- [ ] **Step 3: Implement shared types**
+
+Create `src/types.ts`:
+
+```ts
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface ViewportRect extends Rect {
+  scale: number;
+}
+
+export interface CategoryPreset {
+  id: string;
+  label: string;
+  color: string;
+  defaultTags: string[];
+}
+
+export type DefaultCanvasStrategy = "pdf-specific";
+
+export interface PdfHighlightCanvasSettings {
+  useReaderForVaultPdfs: boolean;
+  defaultZoom: "fit-width";
+  sourceEmphasisDurationMs: number;
+  sourceEmphasisStyle: "outline-fill";
+  defaultCanvasStrategy: DefaultCanvasStrategy;
+  allowCanvasOverride: boolean;
+  defaultNodeWidth: number;
+  pageZoneSpacing: number;
+  nodeVerticalSpacing: number;
+  defaultCategoryId: string;
+  categories: CategoryPreset[];
+  lastPdfWriteError: string | null;
+}
+
+export interface HighlightRecord {
+  id: string;
+  schemaVersion: 1;
+  pdfPath: string;
+  pdfMtime: number;
+  pageNumber: number;
+  selectedText: string;
+  pdfRects: Rect[];
+  viewportRects: ViewportRect[];
+  annotationFingerprint: string;
+  canvasPath: string;
+  canvasNodeId: string;
+  categoryId: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CapturedHighlight {
+  selectedText: string;
+  pageNumber: number;
+  pdfRects: Rect[];
+  viewportRects: ViewportRect[];
+}
+```
+
+- [ ] **Step 4: Implement settings defaults and tab**
+
+Create `src/settings.ts`:
+
+```ts
+import { App, PluginSettingTab, Setting } from "obsidian";
+import type PdfHighlightCanvasPlugin from "./main";
+import type { CategoryPreset, PdfHighlightCanvasSettings } from "./types";
+
+export const DEFAULT_CATEGORIES: CategoryPreset[] = [
+  { id: "core-claim", label: "Core claim", color: "#f59e0b", defaultTags: ["claim"] },
+  { id: "evidence", label: "Evidence", color: "#22c55e", defaultTags: ["evidence"] },
+  { id: "question", label: "Question", color: "#38bdf8", defaultTags: ["question"] },
+  { id: "quote", label: "Quote", color: "#a78bfa", defaultTags: ["quote"] },
+  { id: "counterpoint", label: "Counterpoint", color: "#f43f5e", defaultTags: ["counterpoint"] }
+];
+
+export const DEFAULT_SETTINGS: PdfHighlightCanvasSettings = {
+  useReaderForVaultPdfs: true,
+  defaultZoom: "fit-width",
+  sourceEmphasisDurationMs: 1600,
+  sourceEmphasisStyle: "outline-fill",
+  defaultCanvasStrategy: "pdf-specific",
+  allowCanvasOverride: true,
+  defaultNodeWidth: 420,
+  pageZoneSpacing: 720,
+  nodeVerticalSpacing: 180,
+  defaultCategoryId: "core-claim",
+  categories: DEFAULT_CATEGORIES,
+  lastPdfWriteError: null
+};
+
+export function normalizeSettings(raw: Partial<PdfHighlightCanvasSettings> | null | undefined): PdfHighlightCanvasSettings {
+  const categories = raw?.categories?.length ? raw.categories : DEFAULT_CATEGORIES;
+  const defaultCategoryId = categories.some((category) => category.id === raw?.defaultCategoryId)
+    ? raw!.defaultCategoryId!
+    : categories[0].id;
+
+  return {
+    ...DEFAULT_SETTINGS,
+    ...raw,
+    categories,
+    defaultCategoryId,
+    defaultZoom: "fit-width",
+    sourceEmphasisStyle: "outline-fill",
+    defaultCanvasStrategy: "pdf-specific"
+  };
+}
+
+export class PdfHighlightCanvasSettingTab extends PluginSettingTab {
+  constructor(app: App, private readonly plugin: PdfHighlightCanvasPlugin) {
+    super(app, plugin);
+  }
+
+  display(): void {
+    const { containerEl } = this;
+    containerEl.empty();
+
+    new Setting(containerEl)
+      .setName("Use PDF Highlight Reader for Vault PDFs")
+      .setDesc("Open Vault PDF files in the plugin reader so highlights can become Canvas nodes.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.useReaderForVaultPdfs)
+          .onChange(async (value) => {
+            this.plugin.settings.useReaderForVaultPdfs = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Source emphasis duration")
+      .setDesc("Milliseconds for the temporary visual emphasis when returning to a PDF highlight.")
+      .addText((text) =>
+        text
+          .setValue(String(this.plugin.settings.sourceEmphasisDurationMs))
+          .onChange(async (value) => {
+            const parsed = Number.parseInt(value, 10);
+            if (Number.isFinite(parsed) && parsed >= 300) {
+              this.plugin.settings.sourceEmphasisDurationMs = parsed;
+              await this.plugin.saveSettings();
+            }
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Default node width")
+      .setDesc("Width in Canvas pixels for new highlight nodes.")
+      .addText((text) =>
+        text
+          .setValue(String(this.plugin.settings.defaultNodeWidth))
+          .onChange(async (value) => {
+            const parsed = Number.parseInt(value, 10);
+            if (Number.isFinite(parsed) && parsed >= 240) {
+              this.plugin.settings.defaultNodeWidth = parsed;
+              await this.plugin.saveSettings();
+            }
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Last PDF write error")
+      .setDesc(this.plugin.settings.lastPdfWriteError ?? "No PDF write error recorded.");
+  }
+}
+```
+
+- [ ] **Step 5: Wire settings into plugin**
+
+Replace `src/main.ts` with:
+
+```ts
+import { Plugin } from "obsidian";
+import { DEFAULT_SETTINGS, normalizeSettings, PdfHighlightCanvasSettingTab } from "./settings";
+import type { PdfHighlightCanvasSettings } from "./types";
+
+export default class PdfHighlightCanvasPlugin extends Plugin {
+  settings: PdfHighlightCanvasSettings = DEFAULT_SETTINGS;
+
+  async onload(): Promise<void> {
+    await this.loadSettings();
+    this.addSettingTab(new PdfHighlightCanvasSettingTab(this.app, this));
+
+    this.addCommand({
+      id: "open-pdf-highlight-reader",
+      name: "Open current PDF in PDF Highlight Reader",
+      callback: () => {
+        console.log("PDF Highlight Canvas command registered");
+      }
+    });
+  }
+
+  async loadSettings(): Promise<void> {
+    this.settings = normalizeSettings(await this.loadData());
+  }
+
+  async saveSettings(): Promise<void> {
+    await this.saveData(this.settings);
+  }
+}
+```
+
+- [ ] **Step 6: Run tests and typecheck**
+
+Run:
+
+```bash
+npm test -- tests/settings.test.ts
+npm run typecheck
+```
+
+Expected: tests PASS and typecheck reports no errors.
+
+- [ ] **Step 7: Commit settings**
+
+Run:
+
+```bash
+git add src/types.ts src/settings.ts src/main.ts tests/settings.test.ts
+git commit -m "feat: add settings model"
+```
+
+Expected: commit succeeds.
+
+## Task 3: Implement Canvas JSON Writer
+
+**Files:**
+- Create: `src/canvas/canvasTypes.ts`
+- Create: `src/canvas/canvasNodeWriter.ts`
+- Create: `src/utils/id.ts`
+- Create: `src/utils/path.ts`
+- Create: `tests/canvasNodeWriter.test.ts`
+
+- [ ] **Step 1: Write Canvas writer tests**
+
+Create `tests/canvasNodeWriter.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { appendHighlightNode, createEmptyCanvas, getDefaultCanvasPath } from "../src/canvas/canvasNodeWriter";
+import type { CategoryPreset } from "../src/types";
+
+const category: CategoryPreset = {
+  id: "core-claim",
+  label: "Core claim",
+  color: "#f59e0b",
+  defaultTags: ["claim"]
+};
+
+describe("canvasNodeWriter", () => {
+  it("creates a PDF-specific canvas path beside the PDF", () => {
+    expect(getDefaultCanvasPath("Sources/paper-name.pdf")).toBe("Sources/paper-name.canvas");
+    expect(getDefaultCanvasPath("paper-name.pdf")).toBe("paper-name.canvas");
+  });
+
+  it("appends a readable text node with category color and source line", () => {
+    const canvas = createEmptyCanvas();
+    const result = appendHighlightNode(canvas, {
+      pdfPath: "Sources/paper-name.pdf",
+      pageNumber: 12,
+      selectedText: "The highlighted sentence.",
+      category,
+      nodeWidth: 420,
+      pageZoneSpacing: 720,
+      nodeVerticalSpacing: 180
+    });
+
+    expect(result.node.text).toContain("Core claim");
+    expect(result.node.text).toContain("The highlighted sentence.");
+    expect(result.node.text).toContain("paper-name.pdf · p.12");
+    expect(result.node.color).toBe("#f59e0b");
+    expect(result.canvas.nodes).toHaveLength(1);
+  });
+
+  it("places page nodes in deterministic page zones", () => {
+    const canvas = createEmptyCanvas();
+    const first = appendHighlightNode(canvas, {
+      pdfPath: "paper.pdf",
+      pageNumber: 1,
+      selectedText: "First",
+      category,
+      nodeWidth: 420,
+      pageZoneSpacing: 720,
+      nodeVerticalSpacing: 180
+    });
+    const second = appendHighlightNode(first.canvas, {
+      pdfPath: "paper.pdf",
+      pageNumber: 2,
+      selectedText: "Second",
+      category,
+      nodeWidth: 420,
+      pageZoneSpacing: 720,
+      nodeVerticalSpacing: 180
+    });
+
+    expect(first.node.x).toBe(0);
+    expect(second.node.x).toBe(720);
+    expect(second.node.y).toBe(0);
+  });
+});
+```
+
+- [ ] **Step 2: Run Canvas tests to verify failure**
+
+Run:
+
+```bash
+npm test -- tests/canvasNodeWriter.test.ts
+```
+
+Expected: FAIL because `src/canvas/canvasNodeWriter.ts` does not exist.
+
+- [ ] **Step 3: Implement JSON Canvas types**
+
+Create `src/canvas/canvasTypes.ts`:
+
+```ts
+export interface CanvasDocument {
+  nodes: CanvasNode[];
+  edges: CanvasEdge[];
+}
+
+export type CanvasNode = CanvasTextNode | CanvasFileNode | CanvasLinkNode | CanvasGroupNode;
+
+export interface CanvasBaseNode {
+  id: string;
+  type: "text" | "file" | "link" | "group";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color?: string;
+}
+
+export interface CanvasTextNode extends CanvasBaseNode {
+  type: "text";
+  text: string;
+}
+
+export interface CanvasFileNode extends CanvasBaseNode {
+  type: "file";
+  file: string;
+  subpath?: string;
+}
+
+export interface CanvasLinkNode extends CanvasBaseNode {
+  type: "link";
+  url: string;
+}
+
+export interface CanvasGroupNode extends CanvasBaseNode {
+  type: "group";
+  label?: string;
+  background?: string;
+  backgroundStyle?: "cover" | "ratio" | "repeat";
+}
+
+export interface CanvasEdge {
+  id: string;
+  fromNode: string;
+  fromSide?: "top" | "right" | "bottom" | "left";
+  fromEnd?: "none" | "arrow";
+  toNode: string;
+  toSide?: "top" | "right" | "bottom" | "left";
+  toEnd?: "none" | "arrow";
+  color?: string;
+  label?: string;
+}
+```
+
+- [ ] **Step 4: Implement ID and path helpers**
+
+Create `src/utils/id.ts`:
+
+```ts
+export function createId(prefix: string): string {
+  const randomPart = Math.random().toString(36).slice(2, 10);
+  return `${prefix}_${Date.now().toString(36)}_${randomPart}`;
+}
+```
+
+Create `src/utils/path.ts`:
+
+```ts
+export function basename(path: string): string {
+  return path.split("/").pop() ?? path;
+}
+
+export function stripExtension(filename: string): string {
+  const index = filename.lastIndexOf(".");
+  return index === -1 ? filename : filename.slice(0, index);
+}
+
+export function dirname(path: string): string {
+  const index = path.lastIndexOf("/");
+  return index === -1 ? "" : path.slice(0, index);
+}
+
+export function joinVaultPath(directory: string, filename: string): string {
+  return directory ? `${directory}/${filename}` : filename;
+}
+```
+
+- [ ] **Step 5: Implement Canvas writer**
+
+Create `src/canvas/canvasNodeWriter.ts`:
+
+```ts
+import type { CanvasDocument, CanvasTextNode } from "./canvasTypes";
+import type { CategoryPreset } from "../types";
+import { basename, dirname, joinVaultPath, stripExtension } from "../utils/path";
+import { createId } from "../utils/id";
+
+export interface AppendHighlightNodeInput {
+  pdfPath: string;
+  pageNumber: number;
+  selectedText: string;
+  category: CategoryPreset;
+  nodeWidth: number;
+  pageZoneSpacing: number;
+  nodeVerticalSpacing: number;
+}
+
+export interface AppendHighlightNodeResult {
+  canvas: CanvasDocument;
+  node: CanvasTextNode;
+}
+
+const DEFAULT_NODE_HEIGHT = 180;
+
+export function createEmptyCanvas(): CanvasDocument {
+  return { nodes: [], edges: [] };
+}
+
+export function parseCanvasJson(raw: string): CanvasDocument {
+  const parsed = JSON.parse(raw) as Partial<CanvasDocument>;
+  return {
+    nodes: Array.isArray(parsed.nodes) ? parsed.nodes : [],
+    edges: Array.isArray(parsed.edges) ? parsed.edges : []
+  };
+}
+
+export function serializeCanvas(canvas: CanvasDocument): string {
+  return `${JSON.stringify(canvas, null, 2)}\n`;
+}
+
+export function getDefaultCanvasPath(pdfPath: string): string {
+  const directory = dirname(pdfPath);
+  const pdfBase = stripExtension(basename(pdfPath));
+  return joinVaultPath(directory, `${pdfBase}.canvas`);
+}
+
+export function appendHighlightNode(canvas: CanvasDocument, input: AppendHighlightNodeInput): AppendHighlightNodeResult {
+  const x = (input.pageNumber - 1) * input.pageZoneSpacing;
+  const existingOnPage = canvas.nodes.filter((node) => node.x === x).length;
+  const y = existingOnPage * input.nodeVerticalSpacing;
+  const pdfName = basename(input.pdfPath);
+
+  const node: CanvasTextNode = {
+    id: createId("highlight_node"),
+    type: "text",
+    x,
+    y,
+    width: input.nodeWidth,
+    height: DEFAULT_NODE_HEIGHT,
+    color: input.category.color,
+    text: `${input.category.label}\n\n${input.selectedText}\n\n${pdfName} · p.${input.pageNumber}`
+  };
+
+  return {
+    canvas: {
+      nodes: [...canvas.nodes, node],
+      edges: [...canvas.edges]
+    },
+    node
+  };
+}
+```
+
+- [ ] **Step 6: Run Canvas tests and typecheck**
+
+Run:
+
+```bash
+npm test -- tests/canvasNodeWriter.test.ts
+npm run typecheck
+```
+
+Expected: tests PASS and typecheck reports no errors.
+
+- [ ] **Step 7: Commit Canvas writer**
+
+Run:
+
+```bash
+git add src/canvas src/utils tests/canvasNodeWriter.test.ts
+git commit -m "feat: add Canvas node writer"
+```
+
+Expected: commit succeeds.
+
+## Task 4: Implement Highlight Index Store
+
+**Files:**
+- Create: `src/index/highlightIndex.ts`
+- Create: `tests/highlightIndex.test.ts`
+
+- [ ] **Step 1: Write index tests**
+
+Create `tests/highlightIndex.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { HighlightIndexDocument, addHighlightRecord, createEmptyHighlightIndex, findByCanvasNodeId, importHighlightIndex } from "../src/index/highlightIndex";
+
+const record = {
+  id: "highlight_1",
+  schemaVersion: 1 as const,
+  pdfPath: "Sources/paper.pdf",
+  pdfMtime: 1000,
+  pageNumber: 2,
+  selectedText: "A useful sentence.",
+  pdfRects: [{ x: 10, y: 20, width: 30, height: 12 }],
+  viewportRects: [{ x: 15, y: 25, width: 45, height: 18, scale: 1.5 }],
+  annotationFingerprint: "sha256:abc",
+  canvasPath: "Sources/paper.canvas",
+  canvasNodeId: "node_1",
+  categoryId: "evidence",
+  tags: ["method"],
+  createdAt: "2026-06-15T00:00:00.000Z",
+  updatedAt: "2026-06-15T00:00:00.000Z"
+};
+
+describe("highlightIndex", () => {
+  it("adds and finds records by canvas node id", () => {
+    const index = addHighlightRecord(createEmptyHighlightIndex(), record);
+    expect(findByCanvasNodeId(index, "node_1")?.pdfPath).toBe("Sources/paper.pdf");
+  });
+
+  it("imports valid JSON and rejects malformed data", () => {
+    const imported = importHighlightIndex(JSON.stringify({ schemaVersion: 1, records: [record] }));
+    expect((imported as HighlightIndexDocument).records).toHaveLength(1);
+    expect(() => importHighlightIndex("{")).toThrow("Invalid highlight index JSON");
+    expect(() => importHighlightIndex(JSON.stringify({ records: "bad" }))).toThrow("Invalid highlight index structure");
+  });
+});
+```
+
+- [ ] **Step 2: Run index tests to verify failure**
+
+Run:
+
+```bash
+npm test -- tests/highlightIndex.test.ts
+```
+
+Expected: FAIL because `src/index/highlightIndex.ts` does not exist.
+
+- [ ] **Step 3: Implement index store helpers**
+
+Create `src/index/highlightIndex.ts`:
+
+```ts
+import type { HighlightRecord } from "../types";
+
+export interface HighlightIndexDocument {
+  schemaVersion: 1;
+  records: HighlightRecord[];
+}
+
+export function createEmptyHighlightIndex(): HighlightIndexDocument {
+  return { schemaVersion: 1, records: [] };
+}
+
+export function addHighlightRecord(index: HighlightIndexDocument, record: HighlightRecord): HighlightIndexDocument {
+  const records = index.records.filter((existing) => existing.id !== record.id);
+  return { schemaVersion: 1, records: [...records, record] };
+}
+
+export function findByCanvasNodeId(index: HighlightIndexDocument, canvasNodeId: string): HighlightRecord | undefined {
+  return index.records.find((record) => record.canvasNodeId === canvasNodeId);
+}
+
+export function findByPdfPath(index: HighlightIndexDocument, pdfPath: string): HighlightRecord[] {
+  return index.records.filter((record) => record.pdfPath === pdfPath);
+}
+
+export function exportHighlightIndex(index: HighlightIndexDocument): string {
+  return `${JSON.stringify(index, null, 2)}\n`;
+}
+
+export function importHighlightIndex(raw: string): HighlightIndexDocument {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Invalid highlight index JSON");
+  }
+
+  if (!isHighlightIndexDocument(parsed)) {
+    throw new Error("Invalid highlight index structure");
+  }
+
+  return parsed;
+}
+
+function isHighlightIndexDocument(value: unknown): value is HighlightIndexDocument {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<HighlightIndexDocument>;
+  return candidate.schemaVersion === 1 && Array.isArray(candidate.records);
+}
+```
+
+- [ ] **Step 4: Run index tests and typecheck**
+
+Run:
+
+```bash
+npm test -- tests/highlightIndex.test.ts
+npm run typecheck
+```
+
+Expected: tests PASS and typecheck reports no errors.
+
+- [ ] **Step 5: Commit index store**
+
+Run:
+
+```bash
+git add src/index tests/highlightIndex.test.ts
+git commit -m "feat: add highlight index store"
+```
+
+Expected: commit succeeds.
+
+## Task 5: Implement Highlight Capture Coordinate Logic
+
+**Files:**
+- Create: `src/pdf/highlightCapture.ts`
+- Create: `tests/highlightCapture.test.ts`
+
+- [ ] **Step 1: Write coordinate normalization tests**
+
+Create `tests/highlightCapture.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { normalizeSelectionRects } from "../src/pdf/highlightCapture";
+
+describe("highlightCapture", () => {
+  it("converts viewport rects to PDF rects with supplied converter", () => {
+    const result = normalizeSelectionRects({
+      pageNumber: 3,
+      pageBounds: { left: 100, top: 200 },
+      scale: 2,
+      clientRects: [{ left: 120, top: 240, right: 220, bottom: 260 }],
+      convertToPdfPoint: (x, y) => [x / 2, y / 2]
+    });
+
+    expect(result.pageNumber).toBe(3);
+    expect(result.viewportRects[0]).toEqual({ x: 20, y: 40, width: 100, height: 20, scale: 2 });
+    expect(result.pdfRects[0]).toEqual({ x: 10, y: 20, width: 50, height: 10 });
+  });
+
+  it("rejects zero-size rectangles", () => {
+    const result = normalizeSelectionRects({
+      pageNumber: 1,
+      pageBounds: { left: 0, top: 0 },
+      scale: 1,
+      clientRects: [{ left: 10, top: 10, right: 10, bottom: 10 }],
+      convertToPdfPoint: (x, y) => [x, y]
+    });
+
+    expect(result.viewportRects).toHaveLength(0);
+    expect(result.pdfRects).toHaveLength(0);
+  });
+});
+```
+
+- [ ] **Step 2: Run capture tests to verify failure**
+
+Run:
+
+```bash
+npm test -- tests/highlightCapture.test.ts
+```
+
+Expected: FAIL because `src/pdf/highlightCapture.ts` does not exist.
+
+- [ ] **Step 3: Implement coordinate normalization**
+
+Create `src/pdf/highlightCapture.ts`:
+
+```ts
+import type { CapturedHighlight, Rect, ViewportRect } from "../types";
+
+export interface ClientRectLike {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+export interface NormalizeSelectionRectsInput {
+  pageNumber: number;
+  pageBounds: { left: number; top: number };
+  scale: number;
+  clientRects: ClientRectLike[];
+  convertToPdfPoint: (x: number, y: number) => [number, number];
+}
+
+export interface NormalizedSelectionRects {
+  pageNumber: number;
+  pdfRects: Rect[];
+  viewportRects: ViewportRect[];
+}
+
+export function normalizeSelectionRects(input: NormalizeSelectionRectsInput): NormalizedSelectionRects {
+  const viewportRects: ViewportRect[] = [];
+  const pdfRects: Rect[] = [];
+
+  for (const rect of input.clientRects) {
+    const width = rect.right - rect.left;
+    const height = rect.bottom - rect.top;
+    if (width <= 0 || height <= 0) continue;
+
+    const x = rect.left - input.pageBounds.left;
+    const y = rect.top - input.pageBounds.top;
+    const [pdfX1, pdfY1] = input.convertToPdfPoint(x, y);
+    const [pdfX2, pdfY2] = input.convertToPdfPoint(x + width, y + height);
+
+    viewportRects.push({ x, y, width, height, scale: input.scale });
+    pdfRects.push({
+      x: Math.min(pdfX1, pdfX2),
+      y: Math.min(pdfY1, pdfY2),
+      width: Math.abs(pdfX2 - pdfX1),
+      height: Math.abs(pdfY2 - pdfY1)
+    });
+  }
+
+  return { pageNumber: input.pageNumber, pdfRects, viewportRects };
+}
+
+export function buildCapturedHighlight(selectedText: string, rects: NormalizedSelectionRects): CapturedHighlight {
+  const trimmed = selectedText.trim();
+  if (!trimmed) {
+    throw new Error("Cannot create a highlight from empty selection");
+  }
+  if (rects.pdfRects.length === 0) {
+    throw new Error("Cannot create a highlight without selection rectangles");
+  }
+  return {
+    selectedText: trimmed,
+    pageNumber: rects.pageNumber,
+    pdfRects: rects.pdfRects,
+    viewportRects: rects.viewportRects
+  };
+}
+```
+
+- [ ] **Step 4: Run capture tests and typecheck**
+
+Run:
+
+```bash
+npm test -- tests/highlightCapture.test.ts
+npm run typecheck
+```
+
+Expected: tests PASS and typecheck reports no errors.
+
+- [ ] **Step 5: Commit capture logic**
+
+Run:
+
+```bash
+git add src/pdf/highlightCapture.ts tests/highlightCapture.test.ts
+git commit -m "feat: add highlight capture geometry"
+```
+
+Expected: commit succeeds.
+
+## Task 6: Implement PDF Annotation Writer
+
+**Files:**
+- Create: `src/pdf/pdfAnnotationWriter.ts`
+- Create: `tests/pdfAnnotationWriter.test.ts`
+
+- [ ] **Step 1: Write annotation writer tests**
+
+Create `tests/pdfAnnotationWriter.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { PDFDocument, PDFName } from "pdf-lib";
+import { writeHighlightAnnotation } from "../src/pdf/pdfAnnotationWriter";
+
+describe("pdfAnnotationWriter", () => {
+  it("writes a highlight annotation to a PDF page", async () => {
+    const doc = await PDFDocument.create();
+    doc.addPage([300, 400]);
+    const bytes = await doc.save();
+
+    const result = await writeHighlightAnnotation(bytes, {
+      pageNumber: 1,
+      selectedText: "Highlighted text",
+      pdfRects: [{ x: 40, y: 300, width: 120, height: 18 }],
+      color: "#f59e0b"
+    });
+
+    const updated = await PDFDocument.load(result.bytes);
+    const page = updated.getPage(0);
+    const annots = page.node.lookup(PDFName.of("Annots"));
+
+    expect(result.annotationFingerprint.startsWith("sha256:")).toBe(true);
+    expect(annots).toBeTruthy();
+  });
+
+  it("rejects page numbers outside the document", async () => {
+    const doc = await PDFDocument.create();
+    doc.addPage([300, 400]);
+    const bytes = await doc.save();
+
+    await expect(
+      writeHighlightAnnotation(bytes, {
+        pageNumber: 2,
+        selectedText: "Bad page",
+        pdfRects: [{ x: 40, y: 300, width: 120, height: 18 }],
+        color: "#f59e0b"
+      })
+    ).rejects.toThrow("PDF page 2 does not exist");
+  });
+});
+```
+
+- [ ] **Step 2: Run annotation tests to verify failure**
+
+Run:
+
+```bash
+npm test -- tests/pdfAnnotationWriter.test.ts
+```
+
+Expected: FAIL because `src/pdf/pdfAnnotationWriter.ts` does not exist.
+
+- [ ] **Step 3: Implement annotation writer**
+
+Create `src/pdf/pdfAnnotationWriter.ts`:
+
+```ts
+import { createHash } from "crypto";
+import {
+  PDFArray,
+  PDFDict,
+  PDFDocument,
+  PDFHexString,
+  PDFName,
+  PDFNumber,
+  PDFString
+} from "pdf-lib";
+import type { Rect } from "../types";
+
+export interface WriteHighlightAnnotationInput {
+  pageNumber: number;
+  selectedText: string;
+  pdfRects: Rect[];
+  color: string;
+}
+
+export interface WriteHighlightAnnotationResult {
+  bytes: Uint8Array;
+  annotationFingerprint: string;
+}
+
+export async function writeHighlightAnnotation(
+  pdfBytes: Uint8Array | ArrayBuffer,
+  input: WriteHighlightAnnotationInput
+): Promise<WriteHighlightAnnotationResult> {
+  const pdfDoc = await PDFDocument.load(pdfBytes);
+  const pageIndex = input.pageNumber - 1;
+  if (pageIndex < 0 || pageIndex >= pdfDoc.getPageCount()) {
+    throw new Error(`PDF page ${input.pageNumber} does not exist`);
+  }
+
+  const page = pdfDoc.getPage(pageIndex);
+  const context = pdfDoc.context;
+  const color = parseHexColor(input.color);
+  const rectBounds = unionRects(input.pdfRects);
+  const quadPoints = rectsToQuadPoints(input.pdfRects);
+
+  const annotation = context.obj({
+    Type: "Annot",
+    Subtype: "Highlight",
+    Rect: [rectBounds.x, rectBounds.y, rectBounds.x + rectBounds.width, rectBounds.y + rectBounds.height],
+    QuadPoints: quadPoints,
+    C: color,
+    Contents: PDFHexString.fromText(input.selectedText),
+    T: PDFString.of("PDF Highlight Canvas"),
+    F: 4
+  }) as PDFDict;
+
+  const annotationRef = context.register(annotation);
+  const existingAnnots = page.node.lookup(PDFName.of("Annots"));
+  let annots: PDFArray;
+  if (existingAnnots instanceof PDFArray) {
+    annots = existingAnnots;
+  } else {
+    annots = context.obj([]) as PDFArray;
+    page.node.set(PDFName.of("Annots"), annots);
+  }
+  annots.push(annotationRef);
+
+  const bytes = await pdfDoc.save();
+  const annotationFingerprint = createAnnotationFingerprint(input);
+  return { bytes, annotationFingerprint };
+}
+
+function unionRects(rects: Rect): Rect;
+function unionRects(rects: Rect[]): Rect;
+function unionRects(rects: Rect | Rect[]): Rect {
+  const list = Array.isArray(rects) ? rects : [rects];
+  if (list.length === 0) {
+    throw new Error("Cannot write a highlight annotation without rectangles");
+  }
+  const minX = Math.min(...list.map((rect) => rect.x));
+  const minY = Math.min(...list.map((rect) => rect.y));
+  const maxX = Math.max(...list.map((rect) => rect.x + rect.width));
+  const maxY = Math.max(...list.map((rect) => rect.y + rect.height));
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+function rectsToQuadPoints(rects: Rect[]): PDFNumber[] {
+  return rects.flatMap((rect) => [
+    PDFNumber.of(rect.x),
+    PDFNumber.of(rect.y + rect.height),
+    PDFNumber.of(rect.x + rect.width),
+    PDFNumber.of(rect.y + rect.height),
+    PDFNumber.of(rect.x),
+    PDFNumber.of(rect.y),
+    PDFNumber.of(rect.x + rect.width),
+    PDFNumber.of(rect.y)
+  ]);
+}
+
+function parseHexColor(hex: string): number[] {
+  const normalized = hex.replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return [1, 0.86, 0.25];
+  }
+  const red = Number.parseInt(normalized.slice(0, 2), 16) / 255;
+  const green = Number.parseInt(normalized.slice(2, 4), 16) / 255;
+  const blue = Number.parseInt(normalized.slice(4, 6), 16) / 255;
+  return [red, green, blue];
+}
+
+function createAnnotationFingerprint(input: WriteHighlightAnnotationInput): string {
+  const hash = createHash("sha256");
+  hash.update(JSON.stringify({
+    pageNumber: input.pageNumber,
+    selectedText: input.selectedText,
+    pdfRects: input.pdfRects,
+    color: input.color
+  }));
+  return `sha256:${hash.digest("hex")}`;
+}
+```
+
+- [ ] **Step 4: Run annotation tests and typecheck**
+
+Run:
+
+```bash
+npm test -- tests/pdfAnnotationWriter.test.ts
+npm run typecheck
+```
+
+Expected: tests PASS and typecheck reports no errors.
+
+- [ ] **Step 5: Commit annotation writer**
+
+Run:
+
+```bash
+git add src/pdf/pdfAnnotationWriter.ts tests/pdfAnnotationWriter.test.ts
+git commit -m "feat: write PDF highlight annotations"
+```
+
+Expected: commit succeeds.
+
+## Task 7: Implement Highlight Creation Flow
+
+**Files:**
+- Create: `src/highlights/createHighlightFlow.ts`
+- Create: `tests/createHighlightFlow.test.ts`
+
+- [ ] **Step 1: Write orchestration tests**
+
+Create `tests/createHighlightFlow.test.ts`:
+
+```ts
+import { describe, expect, it, vi } from "vitest";
+import { createHighlightFlow } from "../src/highlights/createHighlightFlow";
+import type { CapturedHighlight, CategoryPreset } from "../src/types";
+
+const category: CategoryPreset = { id: "evidence", label: "Evidence", color: "#22c55e", defaultTags: ["evidence"] };
+const captured: CapturedHighlight = {
+  selectedText: "A useful sentence.",
+  pageNumber: 4,
+  pdfRects: [{ x: 1, y: 2, width: 3, height: 4 }],
+  viewportRects: [{ x: 1, y: 2, width: 3, height: 4, scale: 1 }]
+};
+
+describe("createHighlightFlow", () => {
+  it("writes PDF annotation before Canvas and index", async () => {
+    const calls: string[] = [];
+    const result = await createHighlightFlow({
+      pdfPath: "Sources/paper.pdf",
+      pdfMtime: 10,
+      captured,
+      category,
+      tags: ["evidence"],
+      settings: { nodeWidth: 420, pageZoneSpacing: 720, nodeVerticalSpacing: 180 },
+      writePdfAnnotation: vi.fn(async () => {
+        calls.push("pdf");
+        return { annotationFingerprint: "sha256:abc" };
+      }),
+      appendCanvasNode: vi.fn(async () => {
+        calls.push("canvas");
+        return { canvasPath: "Sources/paper.canvas", canvasNodeId: "node_1" };
+      }),
+      saveIndexRecord: vi.fn(async () => {
+        calls.push("index");
+      })
+    });
+
+    expect(calls).toEqual(["pdf", "canvas", "index"]);
+    expect(result.canvasNodeId).toBe("node_1");
+  });
+
+  it("does not create Canvas node when PDF annotation fails", async () => {
+    const appendCanvasNode = vi.fn();
+    await expect(
+      createHighlightFlow({
+        pdfPath: "Sources/paper.pdf",
+        pdfMtime: 10,
+        captured,
+        category,
+        tags: [],
+        settings: { nodeWidth: 420, pageZoneSpacing: 720, nodeVerticalSpacing: 180 },
+        writePdfAnnotation: vi.fn(async () => {
+          throw new Error("write failed");
+        }),
+        appendCanvasNode,
+        saveIndexRecord: vi.fn()
+      })
+    ).rejects.toThrow("write failed");
+
+    expect(appendCanvasNode).not.toHaveBeenCalled();
+  });
+});
+```
+
+- [ ] **Step 2: Run flow tests to verify failure**
+
+Run:
+
+```bash
+npm test -- tests/createHighlightFlow.test.ts
+```
+
+Expected: FAIL because `src/highlights/createHighlightFlow.ts` does not exist.
+
+- [ ] **Step 3: Implement strict orchestration**
+
+Create `src/highlights/createHighlightFlow.ts`:
+
+```ts
+import type { CapturedHighlight, CategoryPreset, HighlightRecord } from "../types";
+import { createId } from "../utils/id";
+
+export interface CreateHighlightFlowInput {
+  pdfPath: string;
+  pdfMtime: number;
+  captured: CapturedHighlight;
+  category: CategoryPreset;
+  tags: string[];
+  settings: {
+    nodeWidth: number;
+    pageZoneSpacing: number;
+    nodeVerticalSpacing: number;
+  };
+  writePdfAnnotation: () => Promise<{ annotationFingerprint: string }>;
+  appendCanvasNode: () => Promise<{ canvasPath: string; canvasNodeId: string }>;
+  saveIndexRecord: (record: HighlightRecord) => Promise<void>;
+}
+
+export interface CreateHighlightFlowResult {
+  record: HighlightRecord;
+  canvasPath: string;
+  canvasNodeId: string;
+}
+
+export async function createHighlightFlow(input: CreateHighlightFlowInput): Promise<CreateHighlightFlowResult> {
+  const annotation = await input.writePdfAnnotation();
+  const canvas = await input.appendCanvasNode();
+  const now = new Date().toISOString();
+
+  const record: HighlightRecord = {
+    id: createId("highlight"),
+    schemaVersion: 1,
+    pdfPath: input.pdfPath,
+    pdfMtime: input.pdfMtime,
+    pageNumber: input.captured.pageNumber,
+    selectedText: input.captured.selectedText,
+    pdfRects: input.captured.pdfRects,
+    viewportRects: input.captured.viewportRects,
+    annotationFingerprint: annotation.annotationFingerprint,
+    canvasPath: canvas.canvasPath,
+    canvasNodeId: canvas.canvasNodeId,
+    categoryId: input.category.id,
+    tags: input.tags,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  await input.saveIndexRecord(record);
+  return { record, canvasPath: canvas.canvasPath, canvasNodeId: canvas.canvasNodeId };
+}
+```
+
+- [ ] **Step 4: Run flow tests and typecheck**
+
+Run:
+
+```bash
+npm test -- tests/createHighlightFlow.test.ts
+npm run typecheck
+```
+
+Expected: tests PASS and typecheck reports no errors.
+
+- [ ] **Step 5: Commit flow**
+
+Run:
+
+```bash
+git add src/highlights tests/createHighlightFlow.test.ts
+git commit -m "feat: add highlight creation flow"
+```
+
+Expected: commit succeeds.
+
+## Task 8: Implement Obsidian File Services and Commands
+
+**Files:**
+- Create: `src/commands.ts`
+- Create: `src/obsidian/canvasFileService.ts`
+- Create: `src/obsidian/highlightIndexFileService.ts`
+- Modify: `src/main.ts`
+
+- [ ] **Step 1: Implement Canvas file service**
+
+Create `src/obsidian/canvasFileService.ts`:
+
+```ts
+import type { TFile, Vault } from "obsidian";
+import { appendHighlightNode, createEmptyCanvas, getDefaultCanvasPath, parseCanvasJson, serializeCanvas } from "../canvas/canvasNodeWriter";
+import type { CategoryPreset } from "../types";
+
+export interface AppendCanvasNodeServiceInput {
+  vault: Vault;
+  pdfFile: TFile;
+  selectedText: string;
+  pageNumber: number;
+  category: CategoryPreset;
+  nodeWidth: number;
+  pageZoneSpacing: number;
+  nodeVerticalSpacing: number;
+  targetCanvasPath?: string;
+}
+
+export async function appendCanvasNodeToVault(input: AppendCanvasNodeServiceInput): Promise<{ canvasPath: string; canvasNodeId: string }> {
+  const canvasPath = input.targetCanvasPath ?? getDefaultCanvasPath(input.pdfFile.path);
+  const existing = input.vault.getAbstractFileByPath(canvasPath);
+  const canvas = existing
+    ? parseCanvasJson(await input.vault.read(existing as TFile))
+    : createEmptyCanvas();
+
+  const result = appendHighlightNode(canvas, {
+    pdfPath: input.pdfFile.path,
+    pageNumber: input.pageNumber,
+    selectedText: input.selectedText,
+    category: input.category,
+    nodeWidth: input.nodeWidth,
+    pageZoneSpacing: input.pageZoneSpacing,
+    nodeVerticalSpacing: input.nodeVerticalSpacing
+  });
+
+  if (existing) {
+    await input.vault.modify(existing as TFile, serializeCanvas(result.canvas));
+  } else {
+    await input.vault.create(canvasPath, serializeCanvas(result.canvas));
+  }
+
+  return { canvasPath, canvasNodeId: result.node.id };
+}
+```
+
+- [ ] **Step 2: Implement index file service**
+
+Create `src/obsidian/highlightIndexFileService.ts`:
+
+```ts
+import type { DataAdapter } from "obsidian";
+import { addHighlightRecord, createEmptyHighlightIndex, exportHighlightIndex, importHighlightIndex } from "../index/highlightIndex";
+import type { HighlightRecord } from "../types";
+
+const INDEX_PATH = ".obsidian/plugins/pdf-highlight-canvas/highlights.json";
+
+export async function readIndex(adapter: DataAdapter) {
+  if (!(await adapter.exists(INDEX_PATH))) {
+    return createEmptyHighlightIndex();
+  }
+  return importHighlightIndex(await adapter.read(INDEX_PATH));
+}
+
+export async function saveRecord(adapter: DataAdapter, record: HighlightRecord): Promise<void> {
+  const current = await readIndex(adapter);
+  const next = addHighlightRecord(current, record);
+  await adapter.write(INDEX_PATH, exportHighlightIndex(next));
+}
+```
+
+- [ ] **Step 3: Implement command registration**
+
+Create `src/commands.ts`:
+
+```ts
+import { Notice, TFile } from "obsidian";
+import type PdfHighlightCanvasPlugin from "./main";
+
+export function registerPluginCommands(plugin: PdfHighlightCanvasPlugin): void {
+  plugin.addCommand({
+    id: "open-pdf-highlight-reader",
+    name: "Open current PDF in PDF Highlight Reader",
+    checkCallback: (checking) => {
+      const file = plugin.app.workspace.getActiveFile();
+      const canRun = file instanceof TFile && file.extension === "pdf";
+      if (checking) return canRun;
+      if (!file || file.extension !== "pdf") {
+        new Notice("Open a Vault PDF before running this command.");
+        return false;
+      }
+      void plugin.openPdfReader(file);
+      return true;
+    }
+  });
+
+  plugin.addCommand({
+    id: "reveal-target-canvas",
+    name: "Reveal target Canvas for current PDF",
+    callback: () => {
+      new Notice("Target Canvas reveal is available after the first highlight node is created.");
+    }
+  });
+
+  plugin.addCommand({
+    id: "repair-highlight-index",
+    name: "Repair highlight index for current PDF",
+    callback: () => {
+      new Notice("Highlight index repair completed.");
+    }
+  });
+}
+```
+
+- [ ] **Step 4: Wire services into main plugin**
+
+Replace `src/main.ts` with:
+
+```ts
+import { Plugin, TFile, WorkspaceLeaf } from "obsidian";
+import { registerPluginCommands } from "./commands";
+import { DEFAULT_SETTINGS, normalizeSettings, PdfHighlightCanvasSettingTab } from "./settings";
+import type { PdfHighlightCanvasSettings } from "./types";
+
+export const VIEW_TYPE_PDF_HIGHLIGHT_CANVAS = "pdf-highlight-canvas-reader";
+
+export default class PdfHighlightCanvasPlugin extends Plugin {
+  settings: PdfHighlightCanvasSettings = DEFAULT_SETTINGS;
+
+  async onload(): Promise<void> {
+    await this.loadSettings();
+    if (this.settings.useReaderForVaultPdfs) {
+      this.registerExtensions(["pdf"], VIEW_TYPE_PDF_HIGHLIGHT_CANVAS);
+    }
+    this.addSettingTab(new PdfHighlightCanvasSettingTab(this.app, this));
+    registerPluginCommands(this);
+  }
+
+  async loadSettings(): Promise<void> {
+    this.settings = normalizeSettings(await this.loadData());
+  }
+
+  async saveSettings(): Promise<void> {
+    await this.saveData(this.settings);
+  }
+
+  async openPdfReader(file: TFile): Promise<void> {
+    const leaf: WorkspaceLeaf = this.app.workspace.getLeaf(false);
+    await leaf.setViewState({ type: VIEW_TYPE_PDF_HIGHLIGHT_CANVAS, active: true });
+  }
+}
+```
+
+- [ ] **Step 5: Run typecheck and tests**
+
+Run:
+
+```bash
+npm run typecheck
+npm test
+```
+
+Expected: typecheck reports no errors and all tests PASS.
+
+- [ ] **Step 6: Commit services and commands**
+
+Run:
+
+```bash
+git add src/commands.ts src/obsidian src/main.ts
+git commit -m "feat: add Obsidian file services"
+```
+
+Expected: commit succeeds.
+
+## Task 9: Implement Dedicated PDF Reader View and Popover
+
+**Files:**
+- Create: `src/pdf/pdfReaderView.ts`
+- Create: `src/pdf/highlightPopover.ts`
+- Modify: `src/main.ts`
+- Modify: `src/styles.css`
+
+- [ ] **Step 1: Implement highlight popover**
+
+Create `src/pdf/highlightPopover.ts`:
+
+```ts
+import type { CategoryPreset } from "../types";
+
+export interface HighlightPopoverInput {
+  container: HTMLElement;
+  selectedText: string;
+  categories: CategoryPreset[];
+  defaultCategoryId: string;
+  onCreate: (category: CategoryPreset, tags: string[]) => void;
+  onCancel: () => void;
+}
+
+export class HighlightPopover {
+  private readonly root: HTMLDivElement;
+
+  constructor(private readonly input: HighlightPopoverInput) {
+    this.root = document.createElement("div");
+    this.root.className = "pdf-highlight-canvas-popover";
+  }
+
+  show(): void {
+    const preview = document.createElement("div");
+    preview.className = "pdf-highlight-canvas-popover-preview";
+    preview.textContent = this.input.selectedText;
+
+    const select = document.createElement("select");
+    for (const category of this.input.categories) {
+      const option = document.createElement("option");
+      option.value = category.id;
+      option.textContent = category.label;
+      option.selected = category.id === this.input.defaultCategoryId;
+      select.appendChild(option);
+    }
+
+    const advanced = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = "Advanced";
+    const tagsInput = document.createElement("input");
+    tagsInput.type = "text";
+    tagsInput.placeholder = "tags separated by commas";
+    advanced.append(summary, tagsInput);
+
+    const createButton = document.createElement("button");
+    createButton.textContent = "Create node";
+    createButton.addEventListener("click", () => {
+      const category = this.input.categories.find((item) => item.id === select.value) ?? this.input.categories[0];
+      const tags = tagsInput.value.split(",").map((tag) => tag.trim()).filter(Boolean);
+      this.input.onCreate(category, tags);
+      this.destroy();
+    });
+
+    const cancelButton = document.createElement("button");
+    cancelButton.textContent = "Cancel";
+    cancelButton.addEventListener("click", () => {
+      this.input.onCancel();
+      this.destroy();
+    });
+
+    this.root.append(preview, select, advanced, createButton, cancelButton);
+    this.input.container.appendChild(this.root);
+  }
+
+  destroy(): void {
+    this.root.remove();
+  }
+}
+```
+
+- [ ] **Step 2: Implement reader view**
+
+Create `src/pdf/pdfReaderView.ts`:
+
+```ts
+import { FileView, Notice, TFile, WorkspaceLeaf } from "obsidian";
+import * as pdfjsLib from "pdfjs-dist";
+import type PdfHighlightCanvasPlugin from "../main";
+import { buildCapturedHighlight, normalizeSelectionRects } from "./highlightCapture";
+import { HighlightPopover } from "./highlightPopover";
+
+export const PDF_READER_VIEW_TYPE = "pdf-highlight-canvas-reader";
+
+interface RenderedPage {
+  pageNumber: number;
+  viewport: { convertToPdfPoint: (x: number, y: number) => [number, number]; scale: number };
+  container: HTMLElement;
+}
+
+export class PdfReaderView extends FileView {
+  private file: TFile | null = null;
+  private readonly pages = new Map<number, RenderedPage>();
+  private pageContainer: HTMLDivElement | null = null;
+
+  constructor(leaf: WorkspaceLeaf, private readonly plugin: PdfHighlightCanvasPlugin) {
+    super(leaf);
+  }
+
+  getViewType(): string {
+    return PDF_READER_VIEW_TYPE;
+  }
+
+  getDisplayText(): string {
+    return this.file?.basename ?? "PDF Highlight Reader";
+  }
+
+  async setFile(file: TFile): Promise<void> {
+    this.file = file;
+    await this.renderPdf();
+  }
+
+  protected async onLoadFile(file: TFile): Promise<void> {
+    await this.setFile(file);
+  }
+
+  protected async onUnloadFile(): Promise<void> {
+    this.file = null;
+    this.pages.clear();
+    this.pageContainer?.empty();
+  }
+
+  async onOpen(): Promise<void> {
+    this.containerEl.empty();
+    this.containerEl.addClass("pdf-highlight-canvas-reader");
+    this.pageContainer = this.containerEl.createDiv({ cls: "pdf-highlight-canvas-pages" });
+  }
+
+  async onClose(): Promise<void> {
+    this.pages.clear();
+  }
+
+  private async renderPdf(): Promise<void> {
+    if (!this.file || !this.pageContainer) return;
+    this.pageContainer.empty();
+    this.pages.clear();
+
+    const bytes = await this.app.vault.readBinary(this.file);
+    const documentTask = pdfjsLib.getDocument({ data: bytes, disableWorker: true });
+    const pdf = await documentTask.promise;
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 1.4 });
+      const pageEl = this.pageContainer.createDiv({ cls: "pdf-highlight-canvas-page" });
+      pageEl.dataset.pageNumber = String(pageNumber);
+      pageEl.style.width = `${viewport.width}px`;
+      pageEl.style.height = `${viewport.height}px`;
+
+      const canvas = pageEl.createEl("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Could not create PDF canvas context");
+      await page.render({ canvasContext: context, viewport }).promise;
+
+      const textLayer = pageEl.createDiv({ cls: "pdf-highlight-canvas-text-layer" });
+      const textContent = await page.getTextContent();
+      for (const item of textContent.items) {
+        const textItem = item as { str?: string; transform?: number[]; width?: number };
+        if (!textItem.str?.trim() || !Array.isArray(textItem.transform)) continue;
+        const transform = pdfjsLib.Util.transform(viewport.transform, textItem.transform);
+        const fontHeight = Math.abs(transform[3]);
+        const span = textLayer.createSpan();
+        span.textContent = textItem.str;
+        span.dataset.pageNumber = String(pageNumber);
+        span.style.left = `${transform[4]}px`;
+        span.style.top = `${transform[5] - fontHeight}px`;
+        span.style.fontSize = `${fontHeight}px`;
+        span.style.height = `${fontHeight}px`;
+        span.style.transformOrigin = "0 0";
+        span.style.whiteSpace = "pre";
+      }
+
+      this.pages.set(pageNumber, { pageNumber, viewport, container: pageEl });
+    }
+
+    this.pageContainer.addEventListener("mouseup", () => this.handleSelection());
+  }
+
+  private handleSelection(): void {
+    const selection = window.getSelection();
+    const selectedText = selection?.toString() ?? "";
+    if (!selection || !selectedText.trim() || selection.rangeCount === 0 || !this.pageContainer || !this.file) return;
+
+    const range = selection.getRangeAt(0);
+    const pageEl = (range.startContainer.parentElement ?? range.commonAncestorContainer.parentElement)?.closest<HTMLElement>(".pdf-highlight-canvas-page");
+    const pageNumber = Number(pageEl?.dataset.pageNumber);
+    const page = this.pages.get(pageNumber);
+    if (!page || !pageEl) {
+      new Notice("Select text from a single rendered PDF page.");
+      return;
+    }
+
+    const pageBounds = pageEl.getBoundingClientRect();
+    const rects = normalizeSelectionRects({
+      pageNumber,
+      pageBounds: { left: pageBounds.left, top: pageBounds.top },
+      scale: page.viewport.scale,
+      clientRects: Array.from(range.getClientRects()),
+      convertToPdfPoint: page.viewport.convertToPdfPoint
+    });
+    const captured = buildCapturedHighlight(selectedText, rects);
+
+    new HighlightPopover({
+      container: this.containerEl,
+      selectedText: captured.selectedText,
+      categories: this.plugin.settings.categories,
+      defaultCategoryId: this.plugin.settings.defaultCategoryId,
+      onCreate: () => new Notice("Highlight capture is ready for creation flow wiring."),
+      onCancel: () => selection.removeAllRanges()
+    }).show();
+  }
+}
+```
+
+- [ ] **Step 3: Register reader view in plugin**
+
+Replace `src/main.ts` with:
+
+```ts
+import { Plugin, TFile } from "obsidian";
+import { registerPluginCommands } from "./commands";
+import { PdfReaderView, PDF_READER_VIEW_TYPE } from "./pdf/pdfReaderView";
+import { DEFAULT_SETTINGS, normalizeSettings, PdfHighlightCanvasSettingTab } from "./settings";
+import type { PdfHighlightCanvasSettings } from "./types";
+
+export default class PdfHighlightCanvasPlugin extends Plugin {
+  settings: PdfHighlightCanvasSettings = DEFAULT_SETTINGS;
+
+  async onload(): Promise<void> {
+    await this.loadSettings();
+    this.registerView(PDF_READER_VIEW_TYPE, (leaf) => new PdfReaderView(leaf, this));
+    if (this.settings.useReaderForVaultPdfs) {
+      this.registerExtensions(["pdf"], PDF_READER_VIEW_TYPE);
+    }
+    this.addSettingTab(new PdfHighlightCanvasSettingTab(this.app, this));
+    registerPluginCommands(this);
+  }
+
+  async loadSettings(): Promise<void> {
+    this.settings = normalizeSettings(await this.loadData());
+  }
+
+  async saveSettings(): Promise<void> {
+    await this.saveData(this.settings);
+  }
+
+  async openPdfReader(file: TFile): Promise<void> {
+    const leaf = this.app.workspace.getLeaf(false);
+    await leaf.setViewState({ type: PDF_READER_VIEW_TYPE, active: true });
+    const view = leaf.view;
+    if (view instanceof PdfReaderView) {
+      await view.setFile(file);
+    }
+  }
+}
+```
+
+- [ ] **Step 4: Add reader styles**
+
+Append to `src/styles.css`:
+
+```css
+.pdf-highlight-canvas-pages {
+  flex: 1;
+  overflow: auto;
+  padding: 24px;
+}
+
+.pdf-highlight-canvas-page {
+  position: relative;
+  margin: 0 auto 24px;
+  background: var(--background-primary);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.16);
+}
+
+.pdf-highlight-canvas-page canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.pdf-highlight-canvas-text-layer {
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  user-select: text;
+}
+
+.pdf-highlight-canvas-text-layer span {
+  position: absolute;
+  color: transparent;
+  cursor: text;
+  user-select: text;
+}
+
+.pdf-highlight-canvas-popover {
+  position: absolute;
+  right: 24px;
+  top: 24px;
+  z-index: 20;
+  width: 320px;
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.pdf-highlight-canvas-popover-preview {
+  max-height: 120px;
+  overflow: auto;
+  margin-bottom: 8px;
+  color: var(--text-normal);
+}
+```
+
+- [ ] **Step 5: Run typecheck and build**
+
+Run:
+
+```bash
+npm run typecheck
+npm run build
+```
+
+Expected: typecheck reports no errors and `main.js` builds.
+
+- [ ] **Step 6: Commit reader view**
+
+Run:
+
+```bash
+git add src/pdf/pdfReaderView.ts src/pdf/highlightPopover.ts src/main.ts src/styles.css
+git commit -m "feat: add PDF reader view"
+```
+
+Expected: commit succeeds.
+
+## Task 10: Wire End-to-End Creation and Source Emphasis
+
+**Files:**
+- Modify: `src/pdf/pdfReaderView.ts`
+- Modify: `src/obsidian/canvasFileService.ts`
+- Modify: `src/pdf/pdfAnnotationWriter.ts`
+- Modify: `src/styles.css`
+
+- [ ] **Step 1: Wire popover create action to strict creation flow**
+
+Modify `PdfReaderView.handleSelection()` so the popover `onCreate` callback calls `createHighlightFlow` with these dependencies:
+
+```ts
+onCreate: async (category, tags) => {
+  if (!this.file) return;
+  try {
+    await createHighlightFlow({
+      pdfPath: this.file.path,
+      pdfMtime: this.file.stat.mtime,
+      captured,
+      category,
+      tags: tags.length ? tags : category.defaultTags,
+      settings: {
+        nodeWidth: this.plugin.settings.defaultNodeWidth,
+        pageZoneSpacing: this.plugin.settings.pageZoneSpacing,
+        nodeVerticalSpacing: this.plugin.settings.nodeVerticalSpacing
+      },
+      writePdfAnnotation: async () => {
+        const original = await this.app.vault.readBinary(this.file!);
+        const result = await writeHighlightAnnotation(original, {
+          pageNumber: captured.pageNumber,
+          selectedText: captured.selectedText,
+          pdfRects: captured.pdfRects,
+          color: category.color
+        });
+        await this.app.vault.modifyBinary(this.file!, result.bytes);
+        return { annotationFingerprint: result.annotationFingerprint };
+      },
+      appendCanvasNode: async () =>
+        appendCanvasNodeToVault({
+          vault: this.app.vault,
+          pdfFile: this.file!,
+          selectedText: captured.selectedText,
+          pageNumber: captured.pageNumber,
+          category,
+          nodeWidth: this.plugin.settings.defaultNodeWidth,
+          pageZoneSpacing: this.plugin.settings.pageZoneSpacing,
+          nodeVerticalSpacing: this.plugin.settings.nodeVerticalSpacing
+        }),
+      saveIndexRecord: async (record) => saveRecord(this.app.vault.adapter, record)
+    });
+    new Notice("Created Canvas node from PDF highlight.");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    this.plugin.settings.lastPdfWriteError = message;
+    await this.plugin.saveSettings();
+    new Notice(`Could not create highlight node: ${message}`);
+  } finally {
+    window.getSelection()?.removeAllRanges();
+  }
+}
+```
+
+Also add imports:
+
+```ts
+import { Notice } from "obsidian";
+import { createHighlightFlow } from "../highlights/createHighlightFlow";
+import { appendCanvasNodeToVault } from "../obsidian/canvasFileService";
+import { saveRecord } from "../obsidian/highlightIndexFileService";
+import { writeHighlightAnnotation } from "./pdfAnnotationWriter";
+```
+
+- [ ] **Step 2: Add temporary source emphasis method**
+
+Add this method to `PdfReaderView`:
+
+```ts
+async emphasizeSource(pageNumber: number, rects: { x: number; y: number; width: number; height: number }[]): Promise<void> {
+  const page = this.pages.get(pageNumber);
+  if (!page) return;
+  page.container.scrollIntoView({ block: "center" });
+
+  for (const rect of rects) {
+    const overlay = page.container.createDiv({ cls: "pdf-highlight-canvas-emphasis" });
+    overlay.style.left = `${rect.x}px`;
+    overlay.style.top = `${rect.y}px`;
+    overlay.style.width = `${rect.width}px`;
+    overlay.style.height = `${rect.height}px`;
+    window.setTimeout(() => overlay.remove(), this.plugin.settings.sourceEmphasisDurationMs);
+  }
+}
+```
+
+- [ ] **Step 3: Add emphasis styles**
+
+Append to `src/styles.css`:
+
+```css
+.pdf-highlight-canvas-emphasis {
+  position: absolute;
+  pointer-events: none;
+  border: 2px solid var(--interactive-accent);
+  background: color-mix(in srgb, var(--interactive-accent) 20%, transparent);
+  animation: pdf-highlight-canvas-pulse 1.6s ease-out;
+}
+
+@keyframes pdf-highlight-canvas-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+}
+```
+
+- [ ] **Step 4: Run full verification**
+
+Run:
+
+```bash
+npm test
+npm run build
+git status --short
+```
+
+Expected: tests PASS, build succeeds, and only intentional source files are modified.
+
+- [ ] **Step 5: Commit end-to-end wiring**
+
+Run:
+
+```bash
+git add src/pdf src/obsidian src/styles.css
+git commit -m "feat: wire PDF highlights to Canvas nodes"
+```
+
+Expected: commit succeeds.
+
+## Task 11: Implement Index Maintenance Commands
+
+**Files:**
+- Create: `src/obsidian/indexMaintenance.ts`
+- Create: `tests/indexMaintenance.test.ts`
+- Modify: `src/commands.ts`
+
+- [ ] **Step 1: Write index maintenance tests**
+
+Create `tests/indexMaintenance.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { repairHighlightIndex } from "../src/obsidian/indexMaintenance";
+import { createEmptyHighlightIndex, addHighlightRecord } from "../src/index/highlightIndex";
+
+const baseRecord = {
+  id: "highlight_1",
+  schemaVersion: 1 as const,
+  pdfPath: "Sources/paper.pdf",
+  pdfMtime: 1000,
+  pageNumber: 2,
+  selectedText: "A useful sentence.",
+  pdfRects: [{ x: 10, y: 20, width: 30, height: 12 }],
+  viewportRects: [{ x: 15, y: 25, width: 45, height: 18, scale: 1.5 }],
+  annotationFingerprint: "sha256:abc",
+  canvasPath: "Sources/paper.canvas",
+  canvasNodeId: "node_1",
+  categoryId: "evidence",
+  tags: ["method"],
+  createdAt: "2026-06-15T00:00:00.000Z",
+  updatedAt: "2026-06-15T00:00:00.000Z"
+};
+
+describe("indexMaintenance", () => {
+  it("keeps records whose PDF and Canvas files still exist", async () => {
+    const index = addHighlightRecord(createEmptyHighlightIndex(), baseRecord);
+    const result = await repairHighlightIndex(index, async () => true);
+
+    expect(result.repaired.records).toHaveLength(1);
+    expect(result.removed).toHaveLength(0);
+  });
+
+  it("removes records with missing PDF or Canvas files", async () => {
+    const index = addHighlightRecord(createEmptyHighlightIndex(), baseRecord);
+    const result = await repairHighlightIndex(index, async (path) => path !== "Sources/paper.canvas");
+
+    expect(result.repaired.records).toHaveLength(0);
+    expect(result.removed[0].canvasNodeId).toBe("node_1");
+  });
+});
+```
+
+- [ ] **Step 2: Run maintenance tests to verify failure**
+
+Run:
+
+```bash
+npm test -- tests/indexMaintenance.test.ts
+```
+
+Expected: FAIL because `src/obsidian/indexMaintenance.ts` does not exist.
+
+- [ ] **Step 3: Implement maintenance helpers**
+
+Create `src/obsidian/indexMaintenance.ts`:
+
+```ts
+import type { DataAdapter } from "obsidian";
+import type { HighlightIndexDocument } from "../index/highlightIndex";
+import { exportHighlightIndex, importHighlightIndex } from "../index/highlightIndex";
+import type { HighlightRecord } from "../types";
+
+export const INDEX_EXPORT_PATH = ".obsidian/plugins/pdf-highlight-canvas/highlights-export.json";
+export const INDEX_IMPORT_PATH = ".obsidian/plugins/pdf-highlight-canvas/highlights-import.json";
+
+export interface RepairHighlightIndexResult {
+  repaired: HighlightIndexDocument;
+  removed: HighlightRecord[];
+}
+
+export async function repairHighlightIndex(
+  index: HighlightIndexDocument,
+  exists: (path: string) => Promise<boolean>
+): Promise<RepairHighlightIndexResult> {
+  const kept: HighlightRecord[] = [];
+  const removed: HighlightRecord[] = [];
+
+  for (const record of index.records) {
+    const pdfExists = await exists(record.pdfPath);
+    const canvasExists = await exists(record.canvasPath);
+    if (pdfExists && canvasExists) {
+      kept.push(record);
+    } else {
+      removed.push(record);
+    }
+  }
+
+  return {
+    repaired: { schemaVersion: 1, records: kept },
+    removed
+  };
+}
+
+export async function exportIndex(adapter: DataAdapter, index: HighlightIndexDocument): Promise<string> {
+  await adapter.write(INDEX_EXPORT_PATH, exportHighlightIndex(index));
+  return INDEX_EXPORT_PATH;
+}
+
+export async function importIndex(adapter: DataAdapter): Promise<HighlightIndexDocument> {
+  if (!(await adapter.exists(INDEX_IMPORT_PATH))) {
+    throw new Error(`Import file not found: ${INDEX_IMPORT_PATH}`);
+  }
+  return importHighlightIndex(await adapter.read(INDEX_IMPORT_PATH));
+}
+```
+
+- [ ] **Step 4: Wire maintenance commands**
+
+Add these imports to `src/commands.ts`:
+
+```ts
+import { exportIndex, importIndex, repairHighlightIndex } from "./obsidian/indexMaintenance";
+import { exportHighlightIndex } from "./index/highlightIndex";
+import { readIndex } from "./obsidian/highlightIndexFileService";
+```
+
+Replace the `repair-highlight-index` command callback with:
+
+```ts
+callback: async () => {
+  const index = await readIndex(plugin.app.vault.adapter);
+  const result = await repairHighlightIndex(index, (path) => plugin.app.vault.adapter.exists(path));
+  await plugin.app.vault.adapter.write(
+    ".obsidian/plugins/pdf-highlight-canvas/highlights.json",
+    exportHighlightIndex(result.repaired)
+  );
+  new Notice(`Highlight index repair completed. Removed ${result.removed.length} stale records.`);
+}
+```
+
+Add export and import commands:
+
+```ts
+plugin.addCommand({
+  id: "export-highlight-index",
+  name: "Export highlight index",
+  callback: async () => {
+    const index = await readIndex(plugin.app.vault.adapter);
+    const path = await exportIndex(plugin.app.vault.adapter, index);
+    new Notice(`Highlight index exported to ${path}`);
+  }
+});
+
+plugin.addCommand({
+  id: "import-highlight-index",
+  name: "Import highlight index",
+  callback: async () => {
+    const imported = await importIndex(plugin.app.vault.adapter);
+    await plugin.app.vault.adapter.write(
+      ".obsidian/plugins/pdf-highlight-canvas/highlights.json",
+      exportHighlightIndex(imported)
+    );
+    new Notice(`Highlight index imported with ${imported.records.length} records.`);
+  }
+});
+```
+
+- [ ] **Step 5: Run maintenance tests and typecheck**
+
+Run:
+
+```bash
+npm test -- tests/indexMaintenance.test.ts
+npm run typecheck
+```
+
+Expected: tests PASS and typecheck reports no errors.
+
+- [ ] **Step 6: Commit maintenance commands**
+
+Run:
+
+```bash
+git add src/obsidian/indexMaintenance.ts src/commands.ts tests/indexMaintenance.test.ts
+git commit -m "feat: add highlight index maintenance"
+```
+
+Expected: commit succeeds.
+
+## Task 12: Manual Obsidian Verification
+
+**Files:**
+- Create: `docs/manual-test-checklist.md`
+
+- [ ] **Step 1: Create manual verification checklist**
+
+Create `docs/manual-test-checklist.md`:
+
+```markdown
+# Manual Test Checklist
+
+## Install
+
+1. Build with `npm run build`.
+2. Copy `main.js`, `manifest.json`, and `styles.css` into a test Vault at `.obsidian/plugins/pdf-highlight-canvas/`.
+3. Enable the plugin in Obsidian community plugin settings.
+
+## PDF Reader
+
+1. Open a Vault PDF that has selectable text.
+2. Run `Open current PDF in PDF Highlight Reader`.
+3. Confirm the plugin reader renders pages.
+4. Select text on one page.
+5. Confirm the creation popover appears.
+
+## Highlight to Canvas
+
+1. Choose the `Evidence` category.
+2. Click `Create node`.
+3. Confirm the original PDF file is modified.
+4. Confirm `<pdf-basename>.canvas` is created beside the PDF.
+5. Confirm the Canvas has a text node with category label, selected text, source line, and node color.
+6. Confirm `.obsidian/plugins/pdf-highlight-canvas/highlights.json` contains the PDF path, page, rectangles, Canvas path, and Canvas node ID.
+
+## Failure Behavior
+
+1. Try a scanned PDF with no selectable text.
+2. Confirm the plugin does not create a highlight node.
+3. Make a PDF read-only.
+4. Confirm PDF write failure prevents Canvas node creation.
+```
+
+- [ ] **Step 2: Build and inspect package artifacts**
+
+Run:
+
+```bash
+npm run build
+ls -1 main.js manifest.json styles.css
+```
+
+Expected: all three files exist.
+
+- [ ] **Step 3: Commit manual checklist**
+
+Run:
+
+```bash
+git add docs/manual-test-checklist.md main.js
+git commit -m "docs: add manual plugin verification checklist"
+```
+
+Expected: commit succeeds.
+
+## Completion Criteria
+
+- `npm test` passes.
+- `npm run build` passes.
+- The repository contains `main.js`, `manifest.json`, and `styles.css` for Obsidian installation.
+- The plugin has a dedicated PDF reader view command.
+- The plugin registers the dedicated reader for Vault PDF files when the setting is enabled.
+- Text selection can be captured into normalized page and PDF rectangles.
+- PDF annotation writing is tested against a generated PDF.
+- Canvas text node creation is tested.
+- Highlight index creation and lookup are tested.
+- Highlight index repair, export, and import helpers are tested.
+- The creation flow test proves PDF write happens before Canvas and index writes.
+- Manual test checklist exists for Obsidian runtime verification.
