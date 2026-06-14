@@ -1,0 +1,99 @@
+.pdf-highlight-canvas-reader {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.pdf-highlight-canvas-pages {
+  flex: 1;
+  overflow: auto;
+  padding: 24px;
+}
+
+.pdf-highlight-canvas-page {
+  position: relative;
+  margin: 0 auto 24px;
+  background: var(--background-primary);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.16);
+}
+
+.pdf-highlight-canvas-page canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.pdf-highlight-canvas-text-layer {
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  user-select: text;
+}
+
+.pdf-highlight-canvas-text-layer span {
+  position: absolute;
+  color: transparent;
+  cursor: text;
+  user-select: text;
+}
+
+.pdf-highlight-canvas-no-text {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  color: var(--text-muted);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.pdf-highlight-canvas-popover {
+  position: absolute;
+  right: 24px;
+  top: 24px;
+  z-index: 20;
+  width: 320px;
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.pdf-highlight-canvas-popover-preview {
+  max-height: 120px;
+  overflow: auto;
+  margin-bottom: 8px;
+  color: var(--text-normal);
+}
+
+.pdf-highlight-canvas-popover select,
+.pdf-highlight-canvas-popover input,
+.pdf-highlight-canvas-popover button {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.pdf-highlight-canvas-emphasis {
+  position: absolute;
+  pointer-events: none;
+  border: 2px solid var(--interactive-accent);
+  background: color-mix(in srgb, var(--interactive-accent) 20%, transparent);
+  animation: pdf-highlight-canvas-pulse 1.6s ease-out;
+}
+
+@keyframes pdf-highlight-canvas-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+}
