@@ -20079,11 +20079,15 @@ var HighlightPopover = class {
     createButton.addEventListener("click", () => {
       void Promise.resolve(this.input.onCreate(selectedCategory, [], this.input.selectedTargetPath, this.controls()));
     });
+    const divider = document.createElement("span");
+    divider.className = "highlight-to-canvas-popover-divider";
+    divider.setAttribute("aria-hidden", "true");
     const cancelButton = document.createElement("button");
     cancelButton.type = "button";
     cancelButton.className = "highlight-to-canvas-popover-close";
     cancelButton.setAttribute("aria-label", "Dismiss highlight action");
-    cancelButton.textContent = "\xD7";
+    cancelButton.title = "Dismiss";
+    (0, import_obsidian5.setIcon)(cancelButton, "x");
     cancelButton.addEventListener("click", () => {
       this.input.onCancel();
       this.destroy();
@@ -20107,7 +20111,7 @@ var HighlightPopover = class {
         event.preventDefault();
       }
     });
-    this.root.append(colorGroup, createButton, this.statusEl, cancelButton);
+    this.root.append(colorGroup, divider, createButton, this.statusEl, cancelButton);
     this.input.container.appendChild(this.root);
   }
   destroy() {

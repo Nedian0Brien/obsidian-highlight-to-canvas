@@ -80,11 +80,16 @@ export class HighlightPopover {
       void Promise.resolve(this.input.onCreate(selectedCategory, [], this.input.selectedTargetPath, this.controls()));
     });
 
+    const divider = document.createElement("span");
+    divider.className = "highlight-to-canvas-popover-divider";
+    divider.setAttribute("aria-hidden", "true");
+
     const cancelButton = document.createElement("button");
     cancelButton.type = "button";
     cancelButton.className = "highlight-to-canvas-popover-close";
     cancelButton.setAttribute("aria-label", "Dismiss highlight action");
-    cancelButton.textContent = "×";
+    cancelButton.title = "Dismiss";
+    setIcon(cancelButton, "x");
     cancelButton.addEventListener("click", () => {
       this.input.onCancel();
       this.destroy();
@@ -111,7 +116,7 @@ export class HighlightPopover {
       }
     });
 
-    this.root.append(colorGroup, createButton, this.statusEl, cancelButton);
+    this.root.append(colorGroup, divider, createButton, this.statusEl, cancelButton);
     this.input.container.appendChild(this.root);
   }
 
