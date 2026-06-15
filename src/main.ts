@@ -1,6 +1,7 @@
 import { Notice, Plugin, TFile } from "obsidian";
 import { registerPluginCommands } from "./commands";
 import { addPdfFileMenuEntry } from "./obsidian/pdfEntryPoints";
+import { registerNativePdfSelectionPopover } from "./obsidian/nativePdfIntegration";
 import { PdfReaderView } from "./pdf/pdfReaderView";
 import { buildPdfReaderViewState, PDF_READER_VIEW_TYPE } from "./pdf/pdfReaderState";
 import { DEFAULT_SETTINGS, normalizeSettings, PdfHighlightCanvasSettingTab } from "./settings";
@@ -14,6 +15,7 @@ export default class PdfHighlightCanvasPlugin extends Plugin {
     this.registerView(PDF_READER_VIEW_TYPE, (leaf) => new PdfReaderView(leaf, this));
     this.addSettingTab(new PdfHighlightCanvasSettingTab(this.app, this));
     registerPluginCommands(this);
+    registerNativePdfSelectionPopover(this);
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
         addPdfFileMenuEntry(menu, file, (pdfFile) => {

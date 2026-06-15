@@ -29,6 +29,8 @@ export class Plugin {
   addSettingTab(): void {}
   registerExtensions(): void {}
   registerView(): void {}
+  registerDomEvent(): void {}
+  registerEvent(): void {}
   loadData(): Promise<unknown> {
     return Promise.resolve(null);
   }

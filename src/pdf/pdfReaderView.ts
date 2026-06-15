@@ -35,6 +35,7 @@ export class PdfReaderView extends FileView {
   private statePanel: HTMLDivElement | null = null;
   private selectionListener: (() => void) | null = null;
   private scrollListener: (() => void) | null = null;
+  private activePopover: HighlightPopover | null = null;
   private totalPages = 0;
   private activePage = 1;
   private zoomScale = 1.4;
@@ -110,6 +111,8 @@ export class PdfReaderView extends FileView {
     if (this.scrollListener && this.pageContainer) {
       this.pageContainer.removeEventListener("scroll", this.scrollListener);
     }
+    this.activePopover?.destroy();
+    this.activePopover = null;
     this.pages.clear();
   }
 
@@ -275,10 +278,11 @@ export class PdfReaderView extends FileView {
         height: selectionRect.height
       },
       { x: 0, y: 0, width: rootRect.width, height: rootRect.height },
-      { width: 360, height: 360 }
+      { width: 320, height: 48 }
     );
 
-    new HighlightPopover({
+    this.activePopover?.destroy();
+    this.activePopover = new HighlightPopover({
       container: this.containerEl,
       selectedText: captured.selectedText,
       categories: this.plugin.settings.categories,
@@ -373,7 +377,10 @@ export class PdfReaderView extends FileView {
           window.getSelection()?.removeAllRanges();
         }
       },
-      onCancel: () => selection.removeAllRanges(),
+      onCancel: () => {
+        selection.removeAllRanges();
+        this.activePopover = null;
+      },
       onOpenCanvas: async (canvasPath) => {
         const file = this.app.vault.getAbstractFileByPath(canvasPath);
         if (file instanceof TFile) {
@@ -382,7 +389,8 @@ export class PdfReaderView extends FileView {
           new Notice("The target Canvas has not been created yet.");
         }
       }
-    }).show();
+    });
+    this.activePopover.show();
   }
 
   private registerSelectionListeners(): void {

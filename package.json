@@ -1,6 +1,6 @@
 {
   "name": "highlight-to-canvas",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Turn PDF highlights into connected Obsidian Canvas nodes.",
   "main": "main.js",
   "scripts": {

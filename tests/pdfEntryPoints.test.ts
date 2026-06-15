@@ -61,6 +61,13 @@ describe("PDF entry points", () => {
   it("listens for mouse, touch, and keyboard selection completion", () => {
     expect(HIGHLIGHT_TO_CANVAS_SELECTION_EVENTS).toEqual(["mouseup", "touchend", "keyup"]);
   });
+
+  it("keeps the reader popover as a single reusable instance", () => {
+    const source = require("node:fs").readFileSync("src/pdf/pdfReaderView.ts", "utf8");
+
+    expect(source).toContain("activePopover");
+    expect(source).toContain("this.activePopover?.destroy()");
+  });
 });
 
 function makeFile(path: string, extension: string): TFile {
