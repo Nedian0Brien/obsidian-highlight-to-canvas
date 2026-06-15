@@ -17,6 +17,7 @@ export interface CategoryPreset {
 }
 
 export type DefaultCanvasStrategy = "pdf-specific";
+export type SaveStatus = "idle" | "loading" | "writing-pdf" | "writing-canvas" | "writing-index" | "success" | "error";
 
 export interface PdfHighlightCanvasSettings {
   useReaderForVaultPdfs: boolean;
@@ -30,6 +31,9 @@ export interface PdfHighlightCanvasSettings {
   nodeVerticalSpacing: number;
   defaultCategoryId: string;
   categories: CategoryPreset[];
+  recentCanvasTargets: string[];
+  pdfWritePolicyAccepted: boolean;
+  pendingRecovery: PendingRecovery | null;
   lastPdfWriteError: string | null;
 }
 
@@ -58,3 +62,16 @@ export interface CapturedHighlight {
   viewportRects: ViewportRect[];
 }
 
+export interface PendingRecovery {
+  pdfPath: string;
+  pdfMtime: number;
+  pageNumber: number;
+  selectedText: string;
+  pdfRects: Rect[];
+  viewportRects: ViewportRect[];
+  annotationFingerprint: string;
+  targetCanvasPath: string;
+  categoryId: string;
+  tags: string[];
+  createdAt: string;
+}

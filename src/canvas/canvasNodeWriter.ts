@@ -18,6 +18,14 @@ export interface AppendHighlightNodeResult {
   node: CanvasTextNode;
 }
 
+export interface FormatCanvasNodeTextInput {
+  categoryLabel: string;
+  selectedText: string;
+  pdfName: string;
+  pageNumber: number;
+  maxLength?: number;
+}
+
 const DEFAULT_NODE_HEIGHT = 180;
 
 export function createEmptyCanvas(): CanvasDocument {
@@ -56,7 +64,12 @@ export function appendHighlightNode(canvas: CanvasDocument, input: AppendHighlig
     width: input.nodeWidth,
     height: DEFAULT_NODE_HEIGHT,
     color: input.category.color,
-    text: `${input.category.label}\n\n${input.selectedText}\n\n${pdfName} · p.${input.pageNumber}`
+    text: formatCanvasNodeText({
+      categoryLabel: input.category.label,
+      selectedText: input.selectedText,
+      pdfName,
+      pageNumber: input.pageNumber
+    })
   };
 
   return {
@@ -68,3 +81,12 @@ export function appendHighlightNode(canvas: CanvasDocument, input: AppendHighlig
   };
 }
 
+export function formatCanvasNodeText(input: FormatCanvasNodeTextInput): string {
+  const maxLength = input.maxLength ?? 700;
+  const normalizedText = input.selectedText.replace(/\s+/g, " ").trim();
+  const body = normalizedText.length > maxLength
+    ? `${normalizedText.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`
+    : normalizedText;
+
+  return `${input.categoryLabel}\n\n${body}\n\n${input.pdfName} · p.${input.pageNumber}`;
+}

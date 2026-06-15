@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendHighlightNode, createEmptyCanvas, getDefaultCanvasPath } from "../src/canvas/canvasNodeWriter";
+import { appendHighlightNode, createEmptyCanvas, formatCanvasNodeText, getDefaultCanvasPath } from "../src/canvas/canvasNodeWriter";
 import type { CategoryPreset } from "../src/types";
 
 const category: CategoryPreset = {
@@ -59,5 +59,20 @@ describe("canvasNodeWriter", () => {
     expect(second.node.x).toBe(720);
     expect(second.node.y).toBe(0);
   });
-});
 
+  it("formats long highlights with a readable truncation and source line", () => {
+    const longText = `${"Long highlight sentence. ".repeat(30)}Final sentence.`;
+    const formatted = formatCanvasNodeText({
+      categoryLabel: "Evidence",
+      selectedText: longText,
+      pdfName: "paper.pdf",
+      pageNumber: 3,
+      maxLength: 120
+    });
+
+    expect(formatted).toContain("Evidence");
+    expect(formatted).toContain("paper.pdf · p.3");
+    expect(formatted.length).toBeLessThan(longText.length);
+    expect(formatted).toContain("...");
+  });
+});
