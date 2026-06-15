@@ -23,3 +23,26 @@ export function toFriendlyErrorMessage(error: unknown): string {
 
   return "Something went wrong while creating the highlight node.";
 }
+
+export function toPdfRenderErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const lower = message.toLowerCase();
+
+  if (lower.includes("worker") || lower.includes("pdf.worker") || lower.includes("fake worker")) {
+    return "The PDF renderer could not start inside Obsidian. Reload Obsidian and update Highlight to Canvas from BRAT.";
+  }
+  if (lower.includes("password") || lower.includes("encrypted")) {
+    return "This PDF is encrypted or password-protected, so it cannot be rendered yet.";
+  }
+  if (lower.includes("invalid pdf") || lower.includes("missing pdf") || lower.includes("unexpected server response")) {
+    return "Obsidian could not read this PDF as a valid document. Try reopening the file or testing another PDF.";
+  }
+  if (lower.includes("canvas") || lower.includes("context")) {
+    return "The PDF page canvas could not be created in this Obsidian window. Reload Obsidian and try again.";
+  }
+  if (message.trim()) {
+    return `The PDF could not be rendered: ${message}`;
+  }
+
+  return "The PDF could not be rendered. Open Developer Tools for the detailed Highlight to Canvas error log.";
+}

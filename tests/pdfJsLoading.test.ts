@@ -9,4 +9,12 @@ describe("PDF.js loading", () => {
     expect(source).not.toContain("from 'pdfjs-dist'");
     expect(source).toContain('from "./pdfJs"');
   });
+
+  it("uses Obsidian's PDF.js loader instead of bundling a separate runtime loader", () => {
+    const source = readFileSync("src/pdf/pdfJs.ts", "utf8");
+
+    expect(source).toContain('loadPdfJs as loadObsidianPdfJs');
+    expect(source).toContain('from "obsidian"');
+    expect(source).not.toContain('return import("pdfjs-dist")');
+  });
 });

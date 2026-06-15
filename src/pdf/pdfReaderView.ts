@@ -5,7 +5,7 @@ import type PdfHighlightCanvasPlugin from "../main";
 import { appendCanvasNodeToVault } from "../obsidian/canvasFileService";
 import { saveRecord } from "../obsidian/highlightIndexFileService";
 import type { SaveStatus } from "../types";
-import { toFriendlyErrorMessage } from "../ui/errorMessages";
+import { toFriendlyErrorMessage, toPdfRenderErrorMessage } from "../ui/errorMessages";
 import { buildCapturedHighlight, normalizeSelectionRects } from "./highlightCapture";
 import { HighlightPopover } from "./highlightPopover";
 import { loadPdfJs } from "./pdfJs";
@@ -219,7 +219,8 @@ export class PdfReaderView extends FileView {
         this.setSaveStatus("idle");
       }
     } catch (error) {
-      this.showState("Could not render PDF", toFriendlyErrorMessage(error));
+      console.error("Highlight to Canvas failed to render PDF", error);
+      this.showState("Could not render PDF", toPdfRenderErrorMessage(error));
       this.setSaveStatus("error");
       return;
     }

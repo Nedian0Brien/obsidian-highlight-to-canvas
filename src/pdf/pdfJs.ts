@@ -1,3 +1,5 @@
+import { loadPdfJs as loadObsidianPdfJs } from "obsidian";
+
 export type PdfJsLib = typeof import("pdfjs-dist");
 
 interface PromiseWithResolversLike<T> {
@@ -12,7 +14,7 @@ interface PromiseConstructorWithResolvers extends PromiseConstructor {
 
 export async function loadPdfJs(): Promise<PdfJsLib> {
   ensurePromiseWithResolvers();
-  return import("pdfjs-dist");
+  return (await loadObsidianPdfJs()) as PdfJsLib;
 }
 
 function ensurePromiseWithResolvers(): void {
