@@ -32,4 +32,3 @@ describe("getPopoverPosition", () => {
     expect(position.left).toBe(272);
   });
 });
-

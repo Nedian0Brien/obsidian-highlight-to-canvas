@@ -15,4 +15,3 @@ describe("canvasTarget", () => {
     expect(remembered).toEqual(["C.canvas", "A.canvas", "B.canvas"]);
   });
 });
-

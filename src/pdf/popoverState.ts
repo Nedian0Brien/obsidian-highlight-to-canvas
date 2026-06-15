@@ -59,4 +59,3 @@ function creationMessage(step: PopoverCreationStep): string {
   if (step === "writing-canvas") return "Creating Canvas node...";
   return "Recording source link...";
 }
-

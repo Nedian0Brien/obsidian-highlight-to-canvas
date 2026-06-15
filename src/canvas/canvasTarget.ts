@@ -27,4 +27,3 @@ export function buildCanvasTargetOptions(pdfPath: string, recentTargets: string[
 export function rememberCanvasTarget(existing: string[], selectedPath: string, limit = 5): string[] {
   return [selectedPath, ...existing.filter((path) => path !== selectedPath)].slice(0, limit);
 }
-

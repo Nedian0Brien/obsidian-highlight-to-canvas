@@ -18,4 +18,3 @@ describe("popoverState", () => {
     expect(error).toMatchObject({ status: "error", message: "PDF is read-only", canRetry: true, canSubmit: true });
   });
 });
-
