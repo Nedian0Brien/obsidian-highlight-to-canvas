@@ -59,9 +59,9 @@ npm run build
 Push a tag matching the version in `manifest.json`:
 
 ```bash
-git tag v0.1.2
+git tag v0.1.3
 git push origin main
-git push origin v0.1.2
+git push origin v0.1.3
 ```
 
 The release workflow uploads `main.js`, `manifest.json`, `styles.css`, and a zip package for BRAT/manual installation.

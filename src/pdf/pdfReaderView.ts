@@ -1,4 +1,4 @@
-import { FileView, Notice, TFile, WorkspaceLeaf } from "obsidian";
+import { FileView, Notice, TFile, ViewStateResult, WorkspaceLeaf } from "obsidian";
 import { buildCanvasTargetOptions, rememberCanvasTarget } from "../canvas/canvasTarget";
 import { createHighlightFlow } from "../highlights/createHighlightFlow";
 import type PdfHighlightCanvasPlugin from "../main";
@@ -9,12 +9,11 @@ import { toFriendlyErrorMessage } from "../ui/errorMessages";
 import { buildCapturedHighlight, normalizeSelectionRects } from "./highlightCapture";
 import { HighlightPopover } from "./highlightPopover";
 import { loadPdfJs } from "./pdfJs";
+import { PDF_READER_VIEW_TYPE } from "./pdfReaderState";
 import { getPopoverPosition } from "./popoverPosition";
 import { writeHighlightAnnotation } from "./pdfAnnotationWriter";
 import { ReaderToolbar } from "./readerToolbar";
 import { HIGHLIGHT_TO_CANVAS_SELECTION_EVENTS } from "./selectionEvents";
-
-export const PDF_READER_VIEW_TYPE = "highlight-to-canvas-reader";
 
 interface RenderedPage {
   pageNumber: number;
@@ -79,6 +78,29 @@ export class PdfReaderView extends FileView {
     this.containerEl.appendChild(this.toolbar.element);
     this.statePanel = this.containerEl.createDiv({ cls: "highlight-to-canvas-state-panel" });
     this.pageContainer = this.containerEl.createDiv({ cls: "highlight-to-canvas-pages" });
+    if (this.currentFile) {
+      await this.renderPdf();
+    }
+  }
+
+  getState(): Record<string, unknown> {
+    return {
+      ...super.getState(),
+      file: this.currentFile?.path
+    };
+  }
+
+  async setState(state: unknown, result: ViewStateResult): Promise<void> {
+    await super.setState(state, result);
+    const filePath = getStateFilePath(state);
+    if (!filePath) return;
+
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (file instanceof TFile && file.extension === "pdf") {
+      await this.setFile(file);
+    } else {
+      this.showState("Could not open PDF", "The requested PDF file was not found in this Vault.");
+    }
   }
 
   async onClose(): Promise<void> {
@@ -436,4 +458,10 @@ export class PdfReaderView extends FileView {
       this.updateToolbar();
     }
   }
+}
+
+function getStateFilePath(state: unknown): string | null {
+  if (!state || typeof state !== "object" || !("file" in state)) return null;
+  const file = (state as { file?: unknown }).file;
+  return typeof file === "string" && file.length > 0 ? file : null;
 }

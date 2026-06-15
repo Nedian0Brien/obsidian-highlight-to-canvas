@@ -1,7 +1,8 @@
-import { Plugin, TFile } from "obsidian";
+import { Notice, Plugin, TFile } from "obsidian";
 import { registerPluginCommands } from "./commands";
 import { addPdfFileMenuEntry } from "./obsidian/pdfEntryPoints";
-import { PdfReaderView, PDF_READER_VIEW_TYPE } from "./pdf/pdfReaderView";
+import { PdfReaderView } from "./pdf/pdfReaderView";
+import { buildPdfReaderViewState, PDF_READER_VIEW_TYPE } from "./pdf/pdfReaderState";
 import { DEFAULT_SETTINGS, normalizeSettings, PdfHighlightCanvasSettingTab } from "./settings";
 import type { PdfHighlightCanvasSettings } from "./types";
 
@@ -31,11 +32,17 @@ export default class PdfHighlightCanvasPlugin extends Plugin {
   }
 
   async openPdfReader(file: TFile): Promise<void> {
-    const leaf = this.app.workspace.getLeaf(false);
-    await leaf.setViewState({ type: PDF_READER_VIEW_TYPE, active: true });
-    const view = leaf.view;
-    if (view instanceof PdfReaderView) {
-      await view.setFile(file);
+    try {
+      const leaf = this.app.workspace.getLeaf(false);
+      await leaf.setViewState(buildPdfReaderViewState(file));
+      await leaf.loadIfDeferred?.();
+      const view = leaf.view;
+      if (view instanceof PdfReaderView) {
+        await view.setFile(file);
+      }
+    } catch (error) {
+      console.error("Highlight to Canvas failed to open PDF reader", error);
+      new Notice("Highlight to Canvas could not open this PDF. Check the developer console for details.");
     }
   }
 }

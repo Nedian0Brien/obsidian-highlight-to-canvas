@@ -26562,6 +26562,18 @@ function ensurePromiseWithResolvers() {
   };
 }
 
+// src/pdf/pdfReaderState.ts
+var PDF_READER_VIEW_TYPE = "highlight-to-canvas-reader";
+function buildPdfReaderViewState(file) {
+  return {
+    type: PDF_READER_VIEW_TYPE,
+    active: true,
+    state: {
+      file: file.path
+    }
+  };
+}
+
 // src/pdf/popoverPosition.ts
 var GAP = 8;
 var EDGE_PADDING = 8;
@@ -42295,7 +42307,6 @@ function statusText(status) {
 var HIGHLIGHT_TO_CANVAS_SELECTION_EVENTS = ["mouseup", "touchend", "keyup"];
 
 // src/pdf/pdfReaderView.ts
-var PDF_READER_VIEW_TYPE = "highlight-to-canvas-reader";
 var PdfReaderView = class extends import_obsidian4.FileView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -42340,6 +42351,26 @@ var PdfReaderView = class extends import_obsidian4.FileView {
     this.containerEl.appendChild(this.toolbar.element);
     this.statePanel = this.containerEl.createDiv({ cls: "highlight-to-canvas-state-panel" });
     this.pageContainer = this.containerEl.createDiv({ cls: "highlight-to-canvas-pages" });
+    if (this.currentFile) {
+      await this.renderPdf();
+    }
+  }
+  getState() {
+    return {
+      ...super.getState(),
+      file: this.currentFile?.path
+    };
+  }
+  async setState(state, result) {
+    await super.setState(state, result);
+    const filePath = getStateFilePath(state);
+    if (!filePath) return;
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (file instanceof import_obsidian4.TFile && file.extension === "pdf") {
+      await this.setFile(file);
+    } else {
+      this.showState("Could not open PDF", "The requested PDF file was not found in this Vault.");
+    }
   }
   async onClose() {
     if (this.selectionListener && this.pageContainer) {
@@ -42665,6 +42696,11 @@ var PdfReaderView = class extends import_obsidian4.FileView {
     }
   }
 };
+function getStateFilePath(state) {
+  if (!state || typeof state !== "object" || !("file" in state)) return null;
+  const file = state.file;
+  return typeof file === "string" && file.length > 0 ? file : null;
+}
 
 // src/settings.ts
 var import_obsidian5 = require("obsidian");
@@ -42854,11 +42890,17 @@ var PdfHighlightCanvasPlugin = class extends import_obsidian6.Plugin {
     await this.saveData(this.settings);
   }
   async openPdfReader(file) {
-    const leaf = this.app.workspace.getLeaf(false);
-    await leaf.setViewState({ type: PDF_READER_VIEW_TYPE, active: true });
-    const view = leaf.view;
-    if (view instanceof PdfReaderView) {
-      await view.setFile(file);
+    try {
+      const leaf = this.app.workspace.getLeaf(false);
+      await leaf.setViewState(buildPdfReaderViewState(file));
+      await leaf.loadIfDeferred?.();
+      const view = leaf.view;
+      if (view instanceof PdfReaderView) {
+        await view.setFile(file);
+      }
+    } catch (error2) {
+      console.error("Highlight to Canvas failed to open PDF reader", error2);
+      new import_obsidian6.Notice("Highlight to Canvas could not open this PDF. Check the developer console for details.");
     }
   }
 };
