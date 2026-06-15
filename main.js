@@ -42676,7 +42676,6 @@ var DEFAULT_CATEGORIES = [
   { id: "counterpoint", label: "Counterpoint", color: "#f43f5e", defaultTags: ["counterpoint"] }
 ];
 var DEFAULT_SETTINGS = {
-  useReaderForVaultPdfs: true,
   defaultZoom: "fit-width",
   sourceEmphasisDurationMs: 1600,
   sourceEmphasisStyle: "outline-fill",
@@ -42716,12 +42715,7 @@ var PdfHighlightCanvasSettingTab = class extends import_obsidian5.PluginSettingT
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h3", { text: "Reader" });
-    new import_obsidian5.Setting(containerEl).setName("Use PDF Highlight Reader for Vault PDFs").setDesc("Open Vault PDF files in the plugin reader so highlights can become Canvas nodes.").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.useReaderForVaultPdfs).onChange(async (value) => {
-        this.plugin.settings.useReaderForVaultPdfs = value;
-        await this.plugin.saveSettings();
-      })
-    );
+    new import_obsidian5.Setting(containerEl).setName("Opening PDFs").setDesc("Obsidian owns the default PDF viewer. Use the command palette or the PDF file menu action to open a PDF in Highlight to Canvas.");
     containerEl.createEl("h3", { text: "Canvas" });
     new import_obsidian5.Setting(containerEl).setName("Default target strategy").setDesc("New highlights go to a PDF-specific Canvas by default. Recent Canvas targets can be chosen from the popover.");
     new import_obsidian5.Setting(containerEl).setName("Default node width").setDesc("Width in Canvas pixels for new highlight nodes.").addText(
@@ -42843,9 +42837,6 @@ var PdfHighlightCanvasPlugin = class extends import_obsidian6.Plugin {
   async onload() {
     await this.loadSettings();
     this.registerView(PDF_READER_VIEW_TYPE, (leaf) => new PdfReaderView(leaf, this));
-    if (this.settings.useReaderForVaultPdfs) {
-      this.registerExtensions(["pdf"], PDF_READER_VIEW_TYPE);
-    }
     this.addSettingTab(new PdfHighlightCanvasSettingTab(this.app, this));
     registerPluginCommands(this);
     this.registerEvent(

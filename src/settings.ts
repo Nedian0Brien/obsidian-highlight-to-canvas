@@ -14,7 +14,6 @@ export const DEFAULT_CATEGORIES: CategoryPreset[] = [
 ];
 
 export const DEFAULT_SETTINGS: PdfHighlightCanvasSettings = {
-  useReaderForVaultPdfs: true,
   defaultZoom: "fit-width",
   sourceEmphasisDurationMs: 1600,
   sourceEmphasisStyle: "outline-fill",
@@ -61,16 +60,8 @@ export class PdfHighlightCanvasSettingTab extends PluginSettingTab {
 
     containerEl.createEl("h3", { text: "Reader" });
     new Setting(containerEl)
-      .setName("Use PDF Highlight Reader for Vault PDFs")
-      .setDesc("Open Vault PDF files in the plugin reader so highlights can become Canvas nodes.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.useReaderForVaultPdfs)
-          .onChange(async (value) => {
-            this.plugin.settings.useReaderForVaultPdfs = value;
-            await this.plugin.saveSettings();
-          })
-      );
+      .setName("Opening PDFs")
+      .setDesc("Obsidian owns the default PDF viewer. Use the command palette or the PDF file menu action to open a PDF in Highlight to Canvas.");
 
     containerEl.createEl("h3", { text: "Canvas" });
     new Setting(containerEl)

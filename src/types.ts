@@ -20,7 +20,6 @@ export type DefaultCanvasStrategy = "pdf-specific";
 export type SaveStatus = "idle" | "loading" | "writing-pdf" | "writing-canvas" | "writing-index" | "success" | "error";
 
 export interface PdfHighlightCanvasSettings {
-  useReaderForVaultPdfs: boolean;
   defaultZoom: "fit-width";
   sourceEmphasisDurationMs: number;
   sourceEmphasisStyle: "outline-fill";

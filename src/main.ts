@@ -11,9 +11,6 @@ export default class PdfHighlightCanvasPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
     this.registerView(PDF_READER_VIEW_TYPE, (leaf) => new PdfReaderView(leaf, this));
-    if (this.settings.useReaderForVaultPdfs) {
-      this.registerExtensions(["pdf"], PDF_READER_VIEW_TYPE);
-    }
     this.addSettingTab(new PdfHighlightCanvasSettingTab(this.app, this));
     registerPluginCommands(this);
     this.registerEvent(
