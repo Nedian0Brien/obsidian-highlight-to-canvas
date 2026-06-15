@@ -82,6 +82,18 @@ export function convertNativeRectToPdfRect(input: {
   };
 }
 
+export function tightenHighlightRect(rect: Rect): Rect {
+  const tightenedHeight = roundPdfNumber(rect.height * 0.6);
+  const y = roundPdfNumber(rect.y + (rect.height - tightenedHeight) / 2);
+
+  return {
+    x: rect.x,
+    y,
+    width: rect.width,
+    height: tightenedHeight
+  };
+}
+
 function getElementFromNode(node: Node): Element | null {
   return node instanceof Element ? node : node.parentElement;
 }

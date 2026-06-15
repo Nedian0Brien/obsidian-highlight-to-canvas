@@ -8,6 +8,7 @@ import {
   PDFString
 } from "pdf-lib";
 import type { Rect } from "../types";
+import { tightenHighlightRect } from "../obsidian/nativePdfSelection";
 import { createStableFingerprint } from "../utils/hash";
 
 export interface WriteHighlightAnnotationInput {
@@ -38,8 +39,9 @@ export async function writeHighlightAnnotation(
   const page = pdfDoc.getPage(pageIndex);
   const context = pdfDoc.context;
   const color = parseHexColor(input.color);
-  const rectBounds = unionRects(input.pdfRects);
-  const quadPoints = rectsToQuadPoints(input.pdfRects);
+  const highlightRects = input.pdfRects.map(tightenHighlightRect);
+  const rectBounds = unionRects(highlightRects);
+  const quadPoints = rectsToQuadPoints(highlightRects);
 
   const annotation = context.obj({
     Type: PDFName.of("Annot"),
@@ -49,6 +51,7 @@ export async function writeHighlightAnnotation(
     C: color,
     Contents: PDFHexString.fromText(input.selectedText),
     T: PDFString.of("Highlight to Canvas"),
+    CA: PDFNumber.of(0.35),
     F: 4
   }) as PDFDict;
 

@@ -4238,7 +4238,7 @@ __export(main_exports, {
   default: () => PdfHighlightCanvasPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian8 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 
 // src/commands.ts
 var import_obsidian = require("obsidian");
@@ -4379,7 +4379,7 @@ function addPdfFileMenuEntry(menu, file, openPdfReader) {
 }
 
 // src/obsidian/nativePdfIntegration.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // node_modules/pdf-lib/node_modules/tslib/tslib.es6.js
 var extendStatics = function(d, b) {
@@ -19917,6 +19917,18 @@ async function appendCanvasNodeToVault(input) {
   return { canvasPath, canvasNodeId: result.node.id };
 }
 
+// src/obsidian/openCanvas.ts
+var import_obsidian4 = require("obsidian");
+async function openCanvasToRight(plugin, canvasPath) {
+  const file = plugin.app.vault.getAbstractFileByPath(canvasPath);
+  if (!(file instanceof import_obsidian4.TFile)) {
+    new import_obsidian4.Notice("The target Canvas has not been created yet.");
+    return;
+  }
+  const leaf = plugin.app.workspace.getLeaf("split", "vertical");
+  await leaf.openFile(file);
+}
+
 // src/ui/errorMessages.ts
 function toFriendlyErrorMessage(error2) {
   const message = error2 instanceof Error ? error2.message : typeof error2 === "string" ? error2 : "";
@@ -19961,6 +19973,9 @@ function toPdfRenderErrorMessage(error2) {
   }
   return "The PDF could not be rendered. Open Developer Tools for the detailed Highlight to Canvas error log.";
 }
+
+// src/pdf/highlightPopover.ts
+var import_obsidian5 = require("obsidian");
 
 // src/pdf/popoverState.ts
 function createInitialPopoverState() {
@@ -20017,7 +20032,6 @@ var HighlightPopover = class {
     this.state = createInitialPopoverState();
     this.statusEl = null;
     this.createButton = null;
-    this.openCanvasButton = null;
     this.destroyed = false;
     this.root = document.createElement("div");
     this.root.className = "highlight-to-canvas-popover";
@@ -20029,47 +20043,41 @@ var HighlightPopover = class {
     this.root.dataset.surface = input.surface ?? "reader";
   }
   show() {
-    const select = document.createElement("select");
-    select.setAttribute("aria-label", "Highlight category");
-    const swatch = document.createElement("span");
-    swatch.className = "highlight-to-canvas-category-swatch";
-    for (const category of this.input.categories) {
-      const option = document.createElement("option");
-      option.value = category.id;
-      option.textContent = category.label;
-      option.selected = category.id === this.input.defaultCategoryId;
-      select.appendChild(option);
+    let selectedCategory = this.input.categories.find((item) => item.id === this.input.defaultCategoryId) ?? this.input.categories[0];
+    const colorGroup = document.createElement("div");
+    colorGroup.className = "highlight-to-canvas-color-group";
+    colorGroup.setAttribute("role", "radiogroup");
+    colorGroup.setAttribute("aria-label", "Highlight color");
+    const colorButtons = [];
+    for (const category of this.input.categories.slice(0, 5)) {
+      const colorButton = document.createElement("button");
+      colorButton.type = "button";
+      colorButton.className = "highlight-to-canvas-color-button";
+      colorButton.setAttribute("role", "radio");
+      colorButton.setAttribute("aria-label", category.label);
+      colorButton.title = category.label;
+      colorButton.style.backgroundColor = category.color;
+      const setSelectedCategory = () => {
+        selectedCategory = category;
+        for (const button of colorButtons) {
+          button.dataset.selected = String(button === colorButton);
+          button.setAttribute("aria-checked", String(button === colorButton));
+        }
+      };
+      colorButton.addEventListener("click", setSelectedCategory);
+      colorButtons.push(colorButton);
+      colorGroup.appendChild(colorButton);
+      if (category.id === selectedCategory.id) setSelectedCategory();
     }
-    const updateSwatch = () => {
-      const category = this.input.categories.find((item) => item.id === select.value) ?? this.input.categories[0];
-      swatch.style.backgroundColor = category.color;
-    };
-    select.addEventListener("change", updateSwatch);
-    updateSwatch();
-    const targetSelect = document.createElement("select");
-    targetSelect.setAttribute("aria-label", "Target Canvas");
-    targetSelect.className = "highlight-to-canvas-popover-target";
-    for (const option of this.input.targetOptions) {
-      const optionEl = document.createElement("option");
-      optionEl.value = option.path;
-      optionEl.textContent = option.kind === "default" ? `${option.label} (default)` : option.label;
-      optionEl.selected = option.path === this.input.selectedTargetPath;
-      targetSelect.appendChild(optionEl);
-    }
-    const tagsInput = document.createElement("input");
-    tagsInput.type = "text";
-    tagsInput.placeholder = "tags separated by commas";
-    tagsInput.setAttribute("aria-label", "Tags separated by commas");
-    tagsInput.className = "highlight-to-canvas-popover-tags";
     const createButton = document.createElement("button");
     this.createButton = createButton;
     createButton.type = "button";
     createButton.className = "highlight-to-canvas-popover-primary";
-    createButton.textContent = "Create node";
+    createButton.setAttribute("aria-label", "Create highlight node");
+    createButton.title = "Create highlight node";
+    (0, import_obsidian5.setIcon)(createButton, "plus");
     createButton.addEventListener("click", () => {
-      const category = this.input.categories.find((item) => item.id === select.value) ?? this.input.categories[0];
-      const tags = tagsInput.value.split(",").map((tag) => tag.trim()).filter(Boolean);
-      void Promise.resolve(this.input.onCreate(category, tags, targetSelect.value, this.controls()));
+      void Promise.resolve(this.input.onCreate(selectedCategory, [], this.input.selectedTargetPath, this.controls()));
     });
     const cancelButton = document.createElement("button");
     cancelButton.type = "button";
@@ -20080,20 +20088,6 @@ var HighlightPopover = class {
       this.input.onCancel();
       this.destroy();
     });
-    const openCanvasButton = document.createElement("button");
-    this.openCanvasButton = openCanvasButton;
-    openCanvasButton.type = "button";
-    openCanvasButton.className = "highlight-to-canvas-popover-secondary";
-    openCanvasButton.textContent = "Open Canvas";
-    openCanvasButton.hidden = true;
-    openCanvasButton.addEventListener("click", () => {
-      if (this.state.canvasPath) void this.input.onOpenCanvas(this.state.canvasPath);
-    });
-    const details = document.createElement("details");
-    details.className = "highlight-to-canvas-popover-details";
-    const summary = document.createElement("summary");
-    summary.textContent = "Options";
-    details.append(summary, targetSelect, tagsInput);
     this.statusEl = document.createElement("span");
     this.statusEl.className = "highlight-to-canvas-popover-status";
     this.statusEl.textContent = "";
@@ -20103,7 +20097,7 @@ var HighlightPopover = class {
         this.input.onCancel();
         this.destroy();
       }
-      if (event.key === "Enter" && this.state.canSubmit && document.activeElement !== tagsInput) {
+      if (event.key === "Enter" && this.state.canSubmit) {
         event.preventDefault();
         createButton.click();
       }
@@ -20113,7 +20107,7 @@ var HighlightPopover = class {
         event.preventDefault();
       }
     });
-    this.root.append(swatch, select, createButton, openCanvasButton, details, this.statusEl, cancelButton);
+    this.root.append(colorGroup, createButton, this.statusEl, cancelButton);
     this.input.container.appendChild(this.root);
   }
   destroy() {
@@ -20137,10 +20131,8 @@ var HighlightPopover = class {
     }
     if (this.createButton) {
       this.createButton.disabled = !state.canSubmit;
-      this.createButton.textContent = state.canRetry ? "Retry" : state.status === "creating" ? "Creating..." : "Create node";
-    }
-    if (this.openCanvasButton) {
-      this.openCanvasButton.hidden = state.status !== "success";
+      this.createButton.setAttribute("aria-busy", String(state.status === "creating"));
+      this.createButton.title = state.canRetry ? "Retry" : state.status === "creating" ? "Creating..." : "Create highlight node";
     }
   }
 };
@@ -20165,6 +20157,73 @@ function getPopoverPosition(anchorRect, containerRect, popoverSize) {
 function clamp(value, min, max) {
   if (max < min) return min;
   return Math.min(Math.max(value, min), max);
+}
+
+// src/obsidian/nativePdfSelection.ts
+var NATIVE_PDF_ROOT_SELECTOR = ".pdf-viewer, .pdf-container, .pdf-embed, .workspace-leaf-content";
+var NATIVE_PDF_PAGE_SELECTOR = "[data-page-number], .pdf-page, .page";
+function getNativePdfSelectionDraft(selection, currentFileExtension) {
+  if (currentFileExtension !== "pdf" || selection.rangeCount === 0) return null;
+  const selectedText = selection.toString().trim();
+  if (!selectedText) return null;
+  const range2 = selection.getRangeAt(0);
+  const startElement = getElementFromNode(range2.startContainer);
+  const endElement = getElementFromNode(range2.endContainer);
+  const pageEl = startElement?.closest(NATIVE_PDF_PAGE_SELECTOR) ?? null;
+  const endPageEl = endElement?.closest(NATIVE_PDF_PAGE_SELECTOR) ?? null;
+  if (!pageEl || pageEl !== endPageEl || pageEl.closest(".highlight-to-canvas-reader")) return null;
+  const pageNumber = getNativePdfPageNumber(pageEl);
+  if (!pageNumber) return null;
+  const rootEl = pageEl.closest(NATIVE_PDF_ROOT_SELECTOR) ?? pageEl;
+  const clientRects = Array.from(range2.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
+  if (clientRects.length === 0) return null;
+  return {
+    selectedText,
+    pageNumber,
+    pageEl,
+    rootEl,
+    selectionRect: range2.getBoundingClientRect(),
+    clientRects
+  };
+}
+function getNativePdfPageNumber(pageEl) {
+  const fromData = Number(pageEl.dataset?.pageNumber);
+  if (Number.isInteger(fromData) && fromData > 0) return fromData;
+  const ariaLabel = pageEl.getAttribute("aria-label") ?? pageEl.getAttribute("data-label") ?? "";
+  const match = ariaLabel.match(/\bpage\s+(\d+)\b/i);
+  if (!match) return null;
+  const fromLabel = Number(match[1]);
+  return Number.isInteger(fromLabel) && fromLabel > 0 ? fromLabel : null;
+}
+function convertNativeRectToPdfRect(input) {
+  const scaleX = input.pdfPageSize.width / input.pageViewportSize.width;
+  const scaleY = input.pdfPageSize.height / input.pageViewportSize.height;
+  const x = input.viewportRect.x * scaleX;
+  const width = input.viewportRect.width * scaleX;
+  const height = input.viewportRect.height * scaleY;
+  const y = input.pdfPageSize.height - input.viewportRect.y * scaleY - height;
+  return {
+    x: roundPdfNumber(x),
+    y: roundPdfNumber(y),
+    width: roundPdfNumber(width),
+    height: roundPdfNumber(height)
+  };
+}
+function tightenHighlightRect(rect) {
+  const tightenedHeight = roundPdfNumber(rect.height * 0.6);
+  const y = roundPdfNumber(rect.y + (rect.height - tightenedHeight) / 2);
+  return {
+    x: rect.x,
+    y,
+    width: rect.width,
+    height: tightenedHeight
+  };
+}
+function getElementFromNode(node) {
+  return node instanceof Element ? node : node.parentElement;
+}
+function roundPdfNumber(value) {
+  return Math.round(value * 1e3) / 1e3;
 }
 
 // src/utils/hash.ts
@@ -20361,8 +20420,9 @@ async function writeHighlightAnnotation(pdfBytes, input) {
   const page = pdfDoc.getPage(pageIndex);
   const context = pdfDoc.context;
   const color = parseHexColor(input.color);
-  const rectBounds = unionRects(input.pdfRects);
-  const quadPoints = rectsToQuadPoints(input.pdfRects);
+  const highlightRects = input.pdfRects.map(tightenHighlightRect);
+  const rectBounds = unionRects(highlightRects);
+  const quadPoints = rectsToQuadPoints(highlightRects);
   const annotation = context.obj({
     Type: PDFName_default.of("Annot"),
     Subtype: PDFName_default.of("Highlight"),
@@ -20371,6 +20431,7 @@ async function writeHighlightAnnotation(pdfBytes, input) {
     C: color,
     Contents: PDFHexString_default.fromText(input.selectedText),
     T: PDFString_default.of("Highlight to Canvas"),
+    CA: PDFNumber_default.of(0.35),
     F: 4
   });
   const annotationRef = context.register(annotation);
@@ -20428,63 +20489,6 @@ async function createAnnotationFingerprint(input) {
   }));
 }
 
-// src/obsidian/nativePdfSelection.ts
-var NATIVE_PDF_ROOT_SELECTOR = ".pdf-viewer, .pdf-container, .pdf-embed, .workspace-leaf-content";
-var NATIVE_PDF_PAGE_SELECTOR = "[data-page-number], .pdf-page, .page";
-function getNativePdfSelectionDraft(selection, currentFileExtension) {
-  if (currentFileExtension !== "pdf" || selection.rangeCount === 0) return null;
-  const selectedText = selection.toString().trim();
-  if (!selectedText) return null;
-  const range2 = selection.getRangeAt(0);
-  const startElement = getElementFromNode(range2.startContainer);
-  const endElement = getElementFromNode(range2.endContainer);
-  const pageEl = startElement?.closest(NATIVE_PDF_PAGE_SELECTOR) ?? null;
-  const endPageEl = endElement?.closest(NATIVE_PDF_PAGE_SELECTOR) ?? null;
-  if (!pageEl || pageEl !== endPageEl || pageEl.closest(".highlight-to-canvas-reader")) return null;
-  const pageNumber = getNativePdfPageNumber(pageEl);
-  if (!pageNumber) return null;
-  const rootEl = pageEl.closest(NATIVE_PDF_ROOT_SELECTOR) ?? pageEl;
-  const clientRects = Array.from(range2.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
-  if (clientRects.length === 0) return null;
-  return {
-    selectedText,
-    pageNumber,
-    pageEl,
-    rootEl,
-    selectionRect: range2.getBoundingClientRect(),
-    clientRects
-  };
-}
-function getNativePdfPageNumber(pageEl) {
-  const fromData = Number(pageEl.dataset?.pageNumber);
-  if (Number.isInteger(fromData) && fromData > 0) return fromData;
-  const ariaLabel = pageEl.getAttribute("aria-label") ?? pageEl.getAttribute("data-label") ?? "";
-  const match = ariaLabel.match(/\bpage\s+(\d+)\b/i);
-  if (!match) return null;
-  const fromLabel = Number(match[1]);
-  return Number.isInteger(fromLabel) && fromLabel > 0 ? fromLabel : null;
-}
-function convertNativeRectToPdfRect(input) {
-  const scaleX = input.pdfPageSize.width / input.pageViewportSize.width;
-  const scaleY = input.pdfPageSize.height / input.pageViewportSize.height;
-  const x = input.viewportRect.x * scaleX;
-  const width = input.viewportRect.width * scaleX;
-  const height = input.viewportRect.height * scaleY;
-  const y = input.pdfPageSize.height - input.viewportRect.y * scaleY - height;
-  return {
-    x: roundPdfNumber(x),
-    y: roundPdfNumber(y),
-    width: roundPdfNumber(width),
-    height: roundPdfNumber(height)
-  };
-}
-function getElementFromNode(node) {
-  return node instanceof Element ? node : node.parentElement;
-}
-function roundPdfNumber(value) {
-  return Math.round(value * 1e3) / 1e3;
-}
-
 // src/obsidian/nativePdfIntegration.ts
 function registerNativePdfSelectionPopover(plugin) {
   let activePopover = null;
@@ -20497,7 +20501,7 @@ function registerNativePdfSelectionPopover(plugin) {
     if (target instanceof Element && target.closest(".highlight-to-canvas-popover")) return;
     window.setTimeout(() => {
       const file = plugin.app.workspace.getActiveFile();
-      if (!(file instanceof import_obsidian4.TFile) || file.extension !== "pdf") {
+      if (!(file instanceof import_obsidian6.TFile) || file.extension !== "pdf") {
         dismiss();
         return;
       }
@@ -20522,8 +20526,7 @@ function registerNativePdfSelectionPopover(plugin) {
         rootRect,
         { width: 320, height: 48 }
       );
-      const targetOptions = buildCanvasTargetOptions(file.path, plugin.settings.recentCanvasTargets);
-      const selectedTargetPath = targetOptions[0].path;
+      const selectedTargetPath = buildCanvasTargetOptions(file.path, plugin.settings.recentCanvasTargets)[0].path;
       dismiss();
       activePopover = new HighlightPopover({
         container: document.body,
@@ -20532,7 +20535,6 @@ function registerNativePdfSelectionPopover(plugin) {
         categories: plugin.settings.categories,
         defaultCategoryId: plugin.settings.defaultCategoryId,
         position,
-        targetOptions,
         selectedTargetPath,
         onCreate: async (category, tags, selectedCanvasPath, controls) => {
           try {
@@ -20598,27 +20600,21 @@ function registerNativePdfSelectionPopover(plugin) {
             plugin.settings.pendingRecovery = null;
             await plugin.saveSettings();
             controls.markSuccess(selectedCanvasPath);
-            new import_obsidian4.Notice("Created Canvas node from PDF highlight.");
+            new import_obsidian6.Notice("Created Canvas node from PDF highlight.");
             window.getSelection()?.removeAllRanges();
+            await openCanvasToRight(plugin, selectedCanvasPath);
+            dismiss();
           } catch (error2) {
             const message = toFriendlyErrorMessage(error2);
             plugin.settings.lastPdfWriteError = message;
             await plugin.saveSettings();
             controls.markError(message);
-            new import_obsidian4.Notice(`Could not create highlight node: ${message}`);
+            new import_obsidian6.Notice(`Could not create highlight node: ${message}`);
           }
         },
         onCancel: () => {
           window.getSelection()?.removeAllRanges();
           dismiss();
-        },
-        onOpenCanvas: async (canvasPath) => {
-          const canvasFile = plugin.app.vault.getAbstractFileByPath(canvasPath);
-          if (canvasFile instanceof import_obsidian4.TFile) {
-            await plugin.app.workspace.getLeaf(false).openFile(canvasFile);
-          } else {
-            new import_obsidian4.Notice("The target Canvas has not been created yet.");
-          }
         }
       });
       activePopover.show();
@@ -20660,7 +20656,7 @@ async function captureNativeHighlight(plugin, file, draft) {
 }
 
 // src/pdf/pdfReaderView.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 
 // src/pdf/highlightCapture.ts
 function normalizeSelectionRects(input) {
@@ -20701,10 +20697,10 @@ function buildCapturedHighlight(selectedText, rects) {
 }
 
 // src/pdf/pdfJs.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 async function loadPdfJs() {
   ensurePromiseWithResolvers();
-  return await (0, import_obsidian5.loadPdfJs)();
+  return await (0, import_obsidian7.loadPdfJs)();
 }
 function ensurePromiseWithResolvers() {
   const promiseConstructor = Promise;
@@ -20794,7 +20790,7 @@ function statusText(status) {
 var HIGHLIGHT_TO_CANVAS_SELECTION_EVENTS = ["mouseup", "touchend", "keyup"];
 
 // src/pdf/pdfReaderView.ts
-var PdfReaderView = class extends import_obsidian6.FileView {
+var PdfReaderView = class extends import_obsidian8.FileView {
   constructor(leaf, plugin) {
     super(leaf);
     this.plugin = plugin;
@@ -20854,7 +20850,7 @@ var PdfReaderView = class extends import_obsidian6.FileView {
     const filePath = getStateFilePath(state);
     if (!filePath) return;
     const file = this.app.vault.getAbstractFileByPath(filePath);
-    if (file instanceof import_obsidian6.TFile && file.extension === "pdf") {
+    if (file instanceof import_obsidian8.TFile && file.extension === "pdf") {
       await this.setFile(file);
     } else {
       this.showState("Could not open PDF", "The requested PDF file was not found in this Vault.");
@@ -20994,7 +20990,7 @@ var PdfReaderView = class extends import_obsidian6.FileView {
     const pageNumber = Number(pageEl?.dataset.pageNumber);
     const page = this.pages.get(pageNumber);
     if (!page || !pageEl || pageEl !== endPageEl) {
-      new import_obsidian6.Notice("Select text from a single rendered PDF page.");
+      new import_obsidian8.Notice("Select text from a single rendered PDF page.");
       return;
     }
     const pageBounds = pageEl.getBoundingClientRect();
@@ -21008,8 +21004,7 @@ var PdfReaderView = class extends import_obsidian6.FileView {
     const captured = buildCapturedHighlight(selectedText, rects);
     const selectionRect = range2.getBoundingClientRect();
     const rootRect = this.containerEl.getBoundingClientRect();
-    const targetOptions = buildCanvasTargetOptions(this.currentFile.path, this.plugin.settings.recentCanvasTargets);
-    const targetCanvasPath = targetOptions[0].path;
+    const targetCanvasPath = buildCanvasTargetOptions(this.currentFile.path, this.plugin.settings.recentCanvasTargets)[0].path;
     const position = getPopoverPosition(
       {
         x: selectionRect.left - rootRect.left,
@@ -21027,7 +21022,6 @@ var PdfReaderView = class extends import_obsidian6.FileView {
       categories: this.plugin.settings.categories,
       defaultCategoryId: this.plugin.settings.defaultCategoryId,
       position,
-      targetOptions,
       selectedTargetPath: targetCanvasPath,
       onCreate: async (category, tags, selectedCanvasPath, controls) => {
         if (!this.currentFile) return;
@@ -21098,14 +21092,17 @@ var PdfReaderView = class extends import_obsidian6.FileView {
           await this.plugin.saveSettings();
           controls.markSuccess(selectedCanvasPath);
           this.setSaveStatus("success");
-          new import_obsidian6.Notice("Created Canvas node from PDF highlight.");
+          new import_obsidian8.Notice("Created Canvas node from PDF highlight.");
+          await openCanvasToRight(this.plugin, selectedCanvasPath);
+          this.activePopover?.destroy();
+          this.activePopover = null;
         } catch (error2) {
           const message = toFriendlyErrorMessage(error2);
           this.plugin.settings.lastPdfWriteError = message;
           await this.plugin.saveSettings();
           controls.markError(message);
           this.setSaveStatus("error");
-          new import_obsidian6.Notice(`Could not create highlight node: ${message}`);
+          new import_obsidian8.Notice(`Could not create highlight node: ${message}`);
         } finally {
           window.getSelection()?.removeAllRanges();
         }
@@ -21113,14 +21110,6 @@ var PdfReaderView = class extends import_obsidian6.FileView {
       onCancel: () => {
         selection.removeAllRanges();
         this.activePopover = null;
-      },
-      onOpenCanvas: async (canvasPath) => {
-        const file = this.app.vault.getAbstractFileByPath(canvasPath);
-        if (file instanceof import_obsidian6.TFile) {
-          await this.app.workspace.getLeaf(false).openFile(file);
-        } else {
-          new import_obsidian6.Notice("The target Canvas has not been created yet.");
-        }
       }
     });
     this.activePopover.show();
@@ -21199,7 +21188,7 @@ function getStateFilePath(state) {
 }
 
 // src/settings.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 var DEFAULT_CATEGORIES = [
   { id: "core-claim", label: "Core claim", color: "#f59e0b", defaultTags: ["claim"] },
   { id: "evidence", label: "Evidence", color: "#22c55e", defaultTags: ["evidence"] },
@@ -21238,7 +21227,7 @@ function normalizeSettings(raw) {
     defaultCanvasStrategy: "pdf-specific"
   };
 }
-var PdfHighlightCanvasSettingTab = class extends import_obsidian7.PluginSettingTab {
+var PdfHighlightCanvasSettingTab = class extends import_obsidian9.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -21247,10 +21236,10 @@ var PdfHighlightCanvasSettingTab = class extends import_obsidian7.PluginSettingT
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h3", { text: "Reader" });
-    new import_obsidian7.Setting(containerEl).setName("Opening PDFs").setDesc("Obsidian owns the default PDF viewer. Use the command palette or the PDF file menu action to open a PDF in Highlight to Canvas.");
+    new import_obsidian9.Setting(containerEl).setName("Opening PDFs").setDesc("Obsidian owns the default PDF viewer. Use the command palette or the PDF file menu action to open a PDF in Highlight to Canvas.");
     containerEl.createEl("h3", { text: "Canvas" });
-    new import_obsidian7.Setting(containerEl).setName("Default target strategy").setDesc("New highlights go to a PDF-specific Canvas by default. Recent Canvas targets can be chosen from the popover.");
-    new import_obsidian7.Setting(containerEl).setName("Default node width").setDesc("Width in Canvas pixels for new highlight nodes.").addText(
+    new import_obsidian9.Setting(containerEl).setName("Default target strategy").setDesc("New highlights go to a PDF-specific Canvas by default. Recent Canvas targets can be chosen from the popover.");
+    new import_obsidian9.Setting(containerEl).setName("Default node width").setDesc("Width in Canvas pixels for new highlight nodes.").addText(
       (text) => text.setValue(String(this.plugin.settings.defaultNodeWidth)).onChange(async (value) => {
         const parsed = Number.parseInt(value, 10);
         if (Number.isFinite(parsed) && parsed >= 240) {
@@ -21259,7 +21248,7 @@ var PdfHighlightCanvasSettingTab = class extends import_obsidian7.PluginSettingT
         }
       })
     );
-    new import_obsidian7.Setting(containerEl).setName("Page zone spacing").setDesc("Horizontal Canvas spacing between generated page zones.").addText(
+    new import_obsidian9.Setting(containerEl).setName("Page zone spacing").setDesc("Horizontal Canvas spacing between generated page zones.").addText(
       (text) => text.setValue(String(this.plugin.settings.pageZoneSpacing)).onChange(async (value) => {
         const parsed = Number.parseInt(value, 10);
         if (Number.isFinite(parsed) && parsed >= 480) {
@@ -21268,7 +21257,7 @@ var PdfHighlightCanvasSettingTab = class extends import_obsidian7.PluginSettingT
         }
       })
     );
-    new import_obsidian7.Setting(containerEl).setName("Node vertical spacing").setDesc("Vertical spacing between generated nodes in the same page zone.").addText(
+    new import_obsidian9.Setting(containerEl).setName("Node vertical spacing").setDesc("Vertical spacing between generated nodes in the same page zone.").addText(
       (text) => text.setValue(String(this.plugin.settings.nodeVerticalSpacing)).onChange(async (value) => {
         const parsed = Number.parseInt(value, 10);
         if (Number.isFinite(parsed) && parsed >= 120) {
@@ -21277,7 +21266,7 @@ var PdfHighlightCanvasSettingTab = class extends import_obsidian7.PluginSettingT
         }
       })
     );
-    new import_obsidian7.Setting(containerEl).setName("Source emphasis duration").setDesc("Milliseconds for the temporary visual emphasis when returning to a PDF highlight.").addText(
+    new import_obsidian9.Setting(containerEl).setName("Source emphasis duration").setDesc("Milliseconds for the temporary visual emphasis when returning to a PDF highlight.").addText(
       (text) => text.setValue(String(this.plugin.settings.sourceEmphasisDurationMs)).onChange(async (value) => {
         const parsed = Number.parseInt(value, 10);
         if (Number.isFinite(parsed) && parsed >= 300) {
@@ -21287,7 +21276,7 @@ var PdfHighlightCanvasSettingTab = class extends import_obsidian7.PluginSettingT
       })
     );
     containerEl.createEl("h3", { text: "Categories" });
-    new import_obsidian7.Setting(containerEl).setName("Default category").setDesc("Category selected first in the highlight popover.").addDropdown((dropdown) => {
+    new import_obsidian9.Setting(containerEl).setName("Default category").setDesc("Category selected first in the highlight popover.").addDropdown((dropdown) => {
       for (const category of this.plugin.settings.categories) {
         dropdown.addOption(category.id, category.label);
       }
@@ -21297,7 +21286,7 @@ var PdfHighlightCanvasSettingTab = class extends import_obsidian7.PluginSettingT
       });
     });
     this.plugin.settings.categories.forEach((category, index) => {
-      new import_obsidian7.Setting(containerEl).setName(`Category: ${category.label}`).setDesc("Edit label, color, and default tags.").addText(
+      new import_obsidian9.Setting(containerEl).setName(`Category: ${category.label}`).setDesc("Edit label, color, and default tags.").addText(
         (text) => text.setPlaceholder("Label").setValue(category.label).onChange(async (value) => {
           this.plugin.settings.categories[index].label = value.trim() || category.label;
           await this.plugin.saveSettings();
@@ -21315,20 +21304,20 @@ var PdfHighlightCanvasSettingTab = class extends import_obsidian7.PluginSettingT
       );
     });
     containerEl.createEl("h3", { text: "PDF Writing" });
-    new import_obsidian7.Setting(containerEl).setName("Original PDF write policy").setDesc("This plugin writes real highlight annotations directly to the original PDF before creating a Canvas node.").addToggle(
+    new import_obsidian9.Setting(containerEl).setName("Original PDF write policy").setDesc("This plugin writes real highlight annotations directly to the original PDF before creating a Canvas node.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.pdfWritePolicyAccepted).onChange(async (value) => {
         this.plugin.settings.pdfWritePolicyAccepted = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian7.Setting(containerEl).setName("Pending recovery").setDesc(this.plugin.settings.pendingRecovery ? `Pending Canvas/index retry for ${this.plugin.settings.pendingRecovery.pdfPath}` : "No partial PDF highlight write is waiting for recovery.").addButton(
+    new import_obsidian9.Setting(containerEl).setName("Pending recovery").setDesc(this.plugin.settings.pendingRecovery ? `Pending Canvas/index retry for ${this.plugin.settings.pendingRecovery.pdfPath}` : "No partial PDF highlight write is waiting for recovery.").addButton(
       (button) => button.setButtonText("Clear").onClick(async () => {
         this.plugin.settings.pendingRecovery = null;
         await this.plugin.saveSettings();
         this.display();
       })
     );
-    new import_obsidian7.Setting(containerEl).setName("Last PDF write error").setDesc(this.plugin.settings.lastPdfWriteError ?? "No PDF write error recorded.").addButton(
+    new import_obsidian9.Setting(containerEl).setName("Last PDF write error").setDesc(this.plugin.settings.lastPdfWriteError ?? "No PDF write error recorded.").addButton(
       (button) => button.setButtonText("Reset").onClick(async () => {
         this.plugin.settings.lastPdfWriteError = null;
         await this.plugin.saveSettings();
@@ -21336,32 +21325,32 @@ var PdfHighlightCanvasSettingTab = class extends import_obsidian7.PluginSettingT
       })
     );
     containerEl.createEl("h3", { text: "Index Management" });
-    new import_obsidian7.Setting(containerEl).setName("Repair index").setDesc("Remove highlight records whose PDF or Canvas files no longer exist.").addButton(
+    new import_obsidian9.Setting(containerEl).setName("Repair index").setDesc("Remove highlight records whose PDF or Canvas files no longer exist.").addButton(
       (button) => button.setButtonText("Repair").onClick(async () => {
         const index = await readIndex(this.plugin.app.vault.adapter);
         const result = await repairHighlightIndex(index, (path) => this.plugin.app.vault.adapter.exists(path));
         await this.plugin.app.vault.adapter.write(INDEX_PATH, exportHighlightIndex(result.repaired));
-        new import_obsidian7.Notice(`Highlight index repair completed. Removed ${result.removed.length} stale records.`);
+        new import_obsidian9.Notice(`Highlight index repair completed. Removed ${result.removed.length} stale records.`);
       })
     );
-    new import_obsidian7.Setting(containerEl).setName("Export index").setDesc("Write a copy of the highlight index into the plugin folder.").addButton(
+    new import_obsidian9.Setting(containerEl).setName("Export index").setDesc("Write a copy of the highlight index into the plugin folder.").addButton(
       (button) => button.setButtonText("Export").onClick(async () => {
         const path = await exportIndex(this.plugin.app.vault.adapter, await readIndex(this.plugin.app.vault.adapter));
-        new import_obsidian7.Notice(`Highlight index exported to ${path}`);
+        new import_obsidian9.Notice(`Highlight index exported to ${path}`);
       })
     );
-    new import_obsidian7.Setting(containerEl).setName("Import index").setDesc("Import highlights from highlights-import.json in the plugin folder.").addButton(
+    new import_obsidian9.Setting(containerEl).setName("Import index").setDesc("Import highlights from highlights-import.json in the plugin folder.").addButton(
       (button) => button.setButtonText("Import").onClick(async () => {
         const imported = await importIndex(this.plugin.app.vault.adapter);
         await this.plugin.app.vault.adapter.write(INDEX_PATH, exportHighlightIndex(imported));
-        new import_obsidian7.Notice(`Highlight index imported with ${imported.records.length} records.`);
+        new import_obsidian9.Notice(`Highlight index imported with ${imported.records.length} records.`);
       })
     );
   }
 };
 
 // src/main.ts
-var PdfHighlightCanvasPlugin = class extends import_obsidian8.Plugin {
+var PdfHighlightCanvasPlugin = class extends import_obsidian10.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
@@ -21397,7 +21386,7 @@ var PdfHighlightCanvasPlugin = class extends import_obsidian8.Plugin {
       }
     } catch (error2) {
       console.error("Highlight to Canvas failed to open PDF reader", error2);
-      new import_obsidian8.Notice("Highlight to Canvas could not open this PDF. Check the developer console for details.");
+      new import_obsidian10.Notice("Highlight to Canvas could not open this PDF. Check the developer console for details.");
     }
   }
 };

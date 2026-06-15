@@ -1,5 +1,5 @@
+import { setIcon } from "obsidian";
 import type { CategoryPreset } from "../types";
-import type { CanvasTargetOption } from "../canvas/canvasTarget";
 import type { PopoverPosition } from "./popoverPosition";
 import { createInitialPopoverState, markCreating, markError, markSuccess, type PopoverState } from "./popoverState";
 
@@ -9,12 +9,10 @@ export interface HighlightPopoverInput {
   categories: CategoryPreset[];
   defaultCategoryId: string;
   position: PopoverPosition;
-  targetOptions: CanvasTargetOption[];
   selectedTargetPath: string;
   surface?: "reader" | "native";
   onCreate: (category: CategoryPreset, tags: string[], targetCanvasPath: string, controls: HighlightPopoverControls) => void | Promise<void>;
   onCancel: () => void;
-  onOpenCanvas: (canvasPath: string) => void | Promise<void>;
 }
 
 export interface HighlightPopoverControls {
@@ -29,7 +27,6 @@ export class HighlightPopover {
   private state: PopoverState = createInitialPopoverState();
   private statusEl: HTMLSpanElement | null = null;
   private createButton: HTMLButtonElement | null = null;
-  private openCanvasButton: HTMLButtonElement | null = null;
   private destroyed = false;
 
   constructor(private readonly input: HighlightPopoverInput) {
@@ -44,50 +41,43 @@ export class HighlightPopover {
   }
 
   show(): void {
-    const select = document.createElement("select");
-    select.setAttribute("aria-label", "Highlight category");
-    const swatch = document.createElement("span");
-    swatch.className = "highlight-to-canvas-category-swatch";
-    for (const category of this.input.categories) {
-      const option = document.createElement("option");
-      option.value = category.id;
-      option.textContent = category.label;
-      option.selected = category.id === this.input.defaultCategoryId;
-      select.appendChild(option);
-    }
-    const updateSwatch = () => {
-      const category = this.input.categories.find((item) => item.id === select.value) ?? this.input.categories[0];
-      swatch.style.backgroundColor = category.color;
-    };
-    select.addEventListener("change", updateSwatch);
-    updateSwatch();
+    let selectedCategory = this.input.categories.find((item) => item.id === this.input.defaultCategoryId) ?? this.input.categories[0];
+    const colorGroup = document.createElement("div");
+    colorGroup.className = "highlight-to-canvas-color-group";
+    colorGroup.setAttribute("role", "radiogroup");
+    colorGroup.setAttribute("aria-label", "Highlight color");
+    const colorButtons: HTMLButtonElement[] = [];
 
-    const targetSelect = document.createElement("select");
-    targetSelect.setAttribute("aria-label", "Target Canvas");
-    targetSelect.className = "highlight-to-canvas-popover-target";
-    for (const option of this.input.targetOptions) {
-      const optionEl = document.createElement("option");
-      optionEl.value = option.path;
-      optionEl.textContent = option.kind === "default" ? `${option.label} (default)` : option.label;
-      optionEl.selected = option.path === this.input.selectedTargetPath;
-      targetSelect.appendChild(optionEl);
+    for (const category of this.input.categories.slice(0, 5)) {
+      const colorButton = document.createElement("button");
+      colorButton.type = "button";
+      colorButton.className = "highlight-to-canvas-color-button";
+      colorButton.setAttribute("role", "radio");
+      colorButton.setAttribute("aria-label", category.label);
+      colorButton.title = category.label;
+      colorButton.style.backgroundColor = category.color;
+      const setSelectedCategory = () => {
+        selectedCategory = category;
+        for (const button of colorButtons) {
+          button.dataset.selected = String(button === colorButton);
+          button.setAttribute("aria-checked", String(button === colorButton));
+        }
+      };
+      colorButton.addEventListener("click", setSelectedCategory);
+      colorButtons.push(colorButton);
+      colorGroup.appendChild(colorButton);
+      if (category.id === selectedCategory.id) setSelectedCategory();
     }
-
-    const tagsInput = document.createElement("input");
-    tagsInput.type = "text";
-    tagsInput.placeholder = "tags separated by commas";
-    tagsInput.setAttribute("aria-label", "Tags separated by commas");
-    tagsInput.className = "highlight-to-canvas-popover-tags";
 
     const createButton = document.createElement("button");
     this.createButton = createButton;
     createButton.type = "button";
     createButton.className = "highlight-to-canvas-popover-primary";
-    createButton.textContent = "Create node";
+    createButton.setAttribute("aria-label", "Create highlight node");
+    createButton.title = "Create highlight node";
+    setIcon(createButton, "plus");
     createButton.addEventListener("click", () => {
-      const category = this.input.categories.find((item) => item.id === select.value) ?? this.input.categories[0];
-      const tags = tagsInput.value.split(",").map((tag) => tag.trim()).filter(Boolean);
-      void Promise.resolve(this.input.onCreate(category, tags, targetSelect.value, this.controls()));
+      void Promise.resolve(this.input.onCreate(selectedCategory, [], this.input.selectedTargetPath, this.controls()));
     });
 
     const cancelButton = document.createElement("button");
@@ -100,22 +90,6 @@ export class HighlightPopover {
       this.destroy();
     });
 
-    const openCanvasButton = document.createElement("button");
-    this.openCanvasButton = openCanvasButton;
-    openCanvasButton.type = "button";
-    openCanvasButton.className = "highlight-to-canvas-popover-secondary";
-    openCanvasButton.textContent = "Open Canvas";
-    openCanvasButton.hidden = true;
-    openCanvasButton.addEventListener("click", () => {
-      if (this.state.canvasPath) void this.input.onOpenCanvas(this.state.canvasPath);
-    });
-
-    const details = document.createElement("details");
-    details.className = "highlight-to-canvas-popover-details";
-    const summary = document.createElement("summary");
-    summary.textContent = "Options";
-    details.append(summary, targetSelect, tagsInput);
-
     this.statusEl = document.createElement("span");
     this.statusEl.className = "highlight-to-canvas-popover-status";
     this.statusEl.textContent = "";
@@ -126,7 +100,7 @@ export class HighlightPopover {
         this.input.onCancel();
         this.destroy();
       }
-      if (event.key === "Enter" && this.state.canSubmit && document.activeElement !== tagsInput) {
+      if (event.key === "Enter" && this.state.canSubmit) {
         event.preventDefault();
         createButton.click();
       }
@@ -137,7 +111,7 @@ export class HighlightPopover {
       }
     });
 
-    this.root.append(swatch, select, createButton, openCanvasButton, details, this.statusEl, cancelButton);
+    this.root.append(colorGroup, createButton, this.statusEl, cancelButton);
     this.input.container.appendChild(this.root);
   }
 
@@ -164,10 +138,8 @@ export class HighlightPopover {
     }
     if (this.createButton) {
       this.createButton.disabled = !state.canSubmit;
-      this.createButton.textContent = state.canRetry ? "Retry" : state.status === "creating" ? "Creating..." : "Create node";
-    }
-    if (this.openCanvasButton) {
-      this.openCanvasButton.hidden = state.status !== "success";
+      this.createButton.setAttribute("aria-busy", String(state.status === "creating"));
+      this.createButton.title = state.canRetry ? "Retry" : state.status === "creating" ? "Creating..." : "Create highlight node";
     }
   }
 }

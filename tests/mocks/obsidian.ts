@@ -23,6 +23,10 @@ export class Notice {
   constructor(public readonly message: string) {}
 }
 
+export function setIcon(button: { setAttribute?: (name: string, value: string) => void }, icon: string): void {
+  button.setAttribute?.("data-icon", icon);
+}
+
 export class Plugin {
   app: any;
   addCommand(): void {}

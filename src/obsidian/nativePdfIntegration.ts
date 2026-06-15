@@ -5,6 +5,7 @@ import { createHighlightFlow } from "../highlights/createHighlightFlow";
 import type PdfHighlightCanvasPlugin from "../main";
 import { appendCanvasNodeToVault } from "./canvasFileService";
 import { saveRecord } from "./highlightIndexFileService";
+import { openCanvasToRight } from "./openCanvas";
 import { toFriendlyErrorMessage } from "../ui/errorMessages";
 import { HighlightPopover } from "../pdf/highlightPopover";
 import { getPopoverPosition } from "../pdf/popoverPosition";
@@ -54,8 +55,7 @@ export function registerNativePdfSelectionPopover(plugin: PdfHighlightCanvasPlug
         rootRect,
         { width: 320, height: 48 }
       );
-      const targetOptions = buildCanvasTargetOptions(file.path, plugin.settings.recentCanvasTargets);
-      const selectedTargetPath = targetOptions[0].path;
+      const selectedTargetPath = buildCanvasTargetOptions(file.path, plugin.settings.recentCanvasTargets)[0].path;
 
       dismiss();
       activePopover = new HighlightPopover({
@@ -65,7 +65,6 @@ export function registerNativePdfSelectionPopover(plugin: PdfHighlightCanvasPlug
         categories: plugin.settings.categories,
         defaultCategoryId: plugin.settings.defaultCategoryId,
         position,
-        targetOptions,
         selectedTargetPath,
         onCreate: async (category, tags, selectedCanvasPath, controls) => {
           try {
@@ -139,6 +138,8 @@ export function registerNativePdfSelectionPopover(plugin: PdfHighlightCanvasPlug
             controls.markSuccess(selectedCanvasPath);
             new Notice("Created Canvas node from PDF highlight.");
             window.getSelection()?.removeAllRanges();
+            await openCanvasToRight(plugin, selectedCanvasPath);
+            dismiss();
           } catch (error) {
             const message = toFriendlyErrorMessage(error);
             plugin.settings.lastPdfWriteError = message;
@@ -150,14 +151,6 @@ export function registerNativePdfSelectionPopover(plugin: PdfHighlightCanvasPlug
         onCancel: () => {
           window.getSelection()?.removeAllRanges();
           dismiss();
-        },
-        onOpenCanvas: async (canvasPath) => {
-          const canvasFile = plugin.app.vault.getAbstractFileByPath(canvasPath);
-          if (canvasFile instanceof TFile) {
-            await plugin.app.workspace.getLeaf(false).openFile(canvasFile);
-          } else {
-            new Notice("The target Canvas has not been created yet.");
-          }
         }
       });
       activePopover.show();

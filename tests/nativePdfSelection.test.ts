@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { convertNativeRectToPdfRect, getNativePdfPageNumber } from "../src/obsidian/nativePdfSelection";
+import { convertNativeRectToPdfRect, getNativePdfPageNumber, tightenHighlightRect } from "../src/obsidian/nativePdfSelection";
 
 describe("native PDF selection helpers", () => {
   it("reads the PDF.js page number from a native page element", () => {
@@ -18,5 +18,9 @@ describe("native PDF selection helpers", () => {
         pdfPageSize: { width: 500, height: 1000 }
       })
     ).toEqual({ x: 50, y: 965, width: 100, height: 10 });
+  });
+
+  it("tightens tall native text rectangles around the text center", () => {
+    expect(tightenHighlightRect({ x: 50, y: 960, width: 100, height: 20 })).toEqual({ x: 50, y: 964, width: 100, height: 12 });
   });
 });

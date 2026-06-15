@@ -4,6 +4,7 @@ import { createHighlightFlow } from "../highlights/createHighlightFlow";
 import type PdfHighlightCanvasPlugin from "../main";
 import { appendCanvasNodeToVault } from "../obsidian/canvasFileService";
 import { saveRecord } from "../obsidian/highlightIndexFileService";
+import { openCanvasToRight } from "../obsidian/openCanvas";
 import type { SaveStatus } from "../types";
 import { toFriendlyErrorMessage, toPdfRenderErrorMessage } from "../ui/errorMessages";
 import { buildCapturedHighlight, normalizeSelectionRects } from "./highlightCapture";
@@ -268,8 +269,7 @@ export class PdfReaderView extends FileView {
 
     const selectionRect = range.getBoundingClientRect();
     const rootRect = this.containerEl.getBoundingClientRect();
-    const targetOptions = buildCanvasTargetOptions(this.currentFile.path, this.plugin.settings.recentCanvasTargets);
-    const targetCanvasPath = targetOptions[0].path;
+    const targetCanvasPath = buildCanvasTargetOptions(this.currentFile.path, this.plugin.settings.recentCanvasTargets)[0].path;
     const position = getPopoverPosition(
       {
         x: selectionRect.left - rootRect.left,
@@ -288,7 +288,6 @@ export class PdfReaderView extends FileView {
       categories: this.plugin.settings.categories,
       defaultCategoryId: this.plugin.settings.defaultCategoryId,
       position,
-      targetOptions,
       selectedTargetPath: targetCanvasPath,
       onCreate: async (category, tags, selectedCanvasPath, controls) => {
         if (!this.currentFile) return;
@@ -366,6 +365,9 @@ export class PdfReaderView extends FileView {
           controls.markSuccess(selectedCanvasPath);
           this.setSaveStatus("success");
           new Notice("Created Canvas node from PDF highlight.");
+          await openCanvasToRight(this.plugin, selectedCanvasPath);
+          this.activePopover?.destroy();
+          this.activePopover = null;
         } catch (error) {
           const message = toFriendlyErrorMessage(error);
           this.plugin.settings.lastPdfWriteError = message;
@@ -380,14 +382,6 @@ export class PdfReaderView extends FileView {
       onCancel: () => {
         selection.removeAllRanges();
         this.activePopover = null;
-      },
-      onOpenCanvas: async (canvasPath) => {
-        const file = this.app.vault.getAbstractFileByPath(canvasPath);
-        if (file instanceof TFile) {
-          await this.app.workspace.getLeaf(false).openFile(file);
-        } else {
-          new Notice("The target Canvas has not been created yet.");
-        }
       }
     });
     this.activePopover.show();
