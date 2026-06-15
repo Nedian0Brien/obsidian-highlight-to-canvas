@@ -1,7 +1,7 @@
 {
-  "name": "pdf-highlight-canvas",
+  "name": "highlight-to-canvas",
   "version": "0.1.0",
-  "description": "Create Obsidian Canvas nodes from live PDF highlights.",
+  "description": "Turn PDF highlights into connected Obsidian Canvas nodes.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs --watch",
@@ -32,4 +32,3 @@
     "pdfjs-dist": "^4.4.168"
   }
 }
-

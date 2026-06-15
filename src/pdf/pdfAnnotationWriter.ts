@@ -48,7 +48,7 @@ export async function writeHighlightAnnotation(
     QuadPoints: quadPoints,
     C: color,
     Contents: PDFHexString.fromText(input.selectedText),
-    T: PDFString.of("PDF Highlight Canvas"),
+    T: PDFString.of("Highlight to Canvas"),
     F: 4
   }) as PDFDict;
 

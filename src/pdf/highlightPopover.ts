@@ -32,7 +32,7 @@ export class HighlightPopover {
 
   constructor(private readonly input: HighlightPopoverInput) {
     this.root = document.createElement("div");
-    this.root.className = "pdf-highlight-canvas-popover";
+    this.root.className = "highlight-to-canvas-popover";
     this.root.setAttribute("role", "dialog");
     this.root.setAttribute("aria-label", "Create Canvas node from PDF highlight");
     this.root.style.left = `${input.position.left}px`;
@@ -42,26 +42,26 @@ export class HighlightPopover {
 
   show(): void {
     const header = document.createElement("div");
-    header.className = "pdf-highlight-canvas-popover-header";
+    header.className = "highlight-to-canvas-popover-header";
     const title = document.createElement("div");
-    title.className = "pdf-highlight-canvas-popover-title";
+    title.className = "highlight-to-canvas-popover-title";
     title.textContent = "Create highlight node";
     const policy = document.createElement("div");
-    policy.className = "pdf-highlight-canvas-popover-policy";
+    policy.className = "highlight-to-canvas-popover-policy";
     policy.textContent = "Writes a real highlight annotation to the original PDF.";
     header.append(title, policy);
 
     const preview = document.createElement("div");
-    preview.className = "pdf-highlight-canvas-popover-preview";
+    preview.className = "highlight-to-canvas-popover-preview";
     preview.textContent = this.input.selectedText;
 
     const categoryLabel = document.createElement("label");
-    categoryLabel.className = "pdf-highlight-canvas-field-label";
+    categoryLabel.className = "highlight-to-canvas-field-label";
     categoryLabel.textContent = "Category";
     const select = document.createElement("select");
     select.setAttribute("aria-label", "Highlight category");
     const swatch = document.createElement("span");
-    swatch.className = "pdf-highlight-canvas-category-swatch";
+    swatch.className = "highlight-to-canvas-category-swatch";
     for (const category of this.input.categories) {
       const option = document.createElement("option");
       option.value = category.id;
@@ -77,11 +77,11 @@ export class HighlightPopover {
     updateSwatch();
 
     const categoryRow = document.createElement("div");
-    categoryRow.className = "pdf-highlight-canvas-category-row";
+    categoryRow.className = "highlight-to-canvas-category-row";
     categoryRow.append(swatch, select);
 
     const targetLabel = document.createElement("label");
-    targetLabel.className = "pdf-highlight-canvas-field-label";
+    targetLabel.className = "highlight-to-canvas-field-label";
     targetLabel.textContent = "Target Canvas";
     const targetSelect = document.createElement("select");
     targetSelect.setAttribute("aria-label", "Target Canvas");
@@ -130,7 +130,7 @@ export class HighlightPopover {
     });
 
     this.statusEl = document.createElement("div");
-    this.statusEl.className = "pdf-highlight-canvas-popover-status";
+    this.statusEl.className = "highlight-to-canvas-popover-status";
     this.statusEl.textContent = "Ready";
 
     this.root.addEventListener("keydown", (event) => {

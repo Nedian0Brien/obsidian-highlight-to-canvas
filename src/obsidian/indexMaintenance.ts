@@ -3,8 +3,8 @@ import type { HighlightIndexDocument } from "../index/highlightIndex";
 import { exportHighlightIndex, importHighlightIndex } from "../index/highlightIndex";
 import type { HighlightRecord } from "../types";
 
-export const INDEX_EXPORT_PATH = ".obsidian/plugins/pdf-highlight-canvas/highlights-export.json";
-export const INDEX_IMPORT_PATH = ".obsidian/plugins/pdf-highlight-canvas/highlights-import.json";
+export const INDEX_EXPORT_PATH = ".obsidian/plugins/highlight-to-canvas/highlights-export.json";
+export const INDEX_IMPORT_PATH = ".obsidian/plugins/highlight-to-canvas/highlights-import.json";
 
 export interface RepairHighlightIndexResult {
   repaired: HighlightIndexDocument;
@@ -42,4 +42,3 @@ export async function importIndex(adapter: DataAdapter): Promise<HighlightIndexD
   }
   return importHighlightIndex(await adapter.read(INDEX_IMPORT_PATH));
 }
-

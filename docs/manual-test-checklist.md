@@ -3,13 +3,13 @@
 ## Install
 
 1. Build with `npm run build`.
-2. Copy `main.js`, `manifest.json`, and `styles.css` into a test Vault at `.obsidian/plugins/pdf-highlight-canvas/`.
+2. Copy `main.js`, `manifest.json`, and `styles.css` into a test Vault at `.obsidian/plugins/highlight-to-canvas/`.
 3. Enable the plugin in Obsidian community plugin settings.
 
 ## Mobile Install
 
 1. Build with `npm run build`.
-2. Sync or copy `main.js`, `manifest.json`, and `styles.css` into the mobile test Vault at `.obsidian/plugins/pdf-highlight-canvas/`.
+2. Sync or copy `main.js`, `manifest.json`, and `styles.css` into the mobile test Vault at `.obsidian/plugins/highlight-to-canvas/`.
 3. Open Obsidian on iOS or Android.
 4. Confirm the plugin appears in Community plugins and can be enabled.
 5. Open a selectable-text PDF and run a smoke test: render PDF, select text, create a Canvas node, and confirm the target Canvas file updates.
@@ -38,7 +38,7 @@
 7. Confirm `<pdf-basename>.canvas` is created beside the PDF or the selected target Canvas is updated.
 8. Confirm the Canvas has a text node with category label, selected text, source line, and node color.
 9. Confirm the success state shows `Open Canvas`.
-10. Confirm `.obsidian/plugins/pdf-highlight-canvas/highlights.json` contains the PDF path, page, rectangles, Canvas path, and Canvas node ID.
+10. Confirm `.obsidian/plugins/highlight-to-canvas/highlights.json` contains the PDF path, page, rectangles, Canvas path, and Canvas node ID.
 
 ## Failure Behavior
 

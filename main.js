@@ -4292,7 +4292,7 @@ function isHighlightIndexDocument(value) {
 }
 
 // src/obsidian/highlightIndexFileService.ts
-var INDEX_PATH = ".obsidian/plugins/pdf-highlight-canvas/highlights.json";
+var INDEX_PATH = ".obsidian/plugins/highlight-to-canvas/highlights.json";
 async function readIndex(adapter) {
   if (!await adapter.exists(INDEX_PATH)) {
     return createEmptyHighlightIndex();
@@ -4306,8 +4306,8 @@ async function saveRecord(adapter, record) {
 }
 
 // src/obsidian/indexMaintenance.ts
-var INDEX_EXPORT_PATH = ".obsidian/plugins/pdf-highlight-canvas/highlights-export.json";
-var INDEX_IMPORT_PATH = ".obsidian/plugins/pdf-highlight-canvas/highlights-import.json";
+var INDEX_EXPORT_PATH = ".obsidian/plugins/highlight-to-canvas/highlights-export.json";
+var INDEX_IMPORT_PATH = ".obsidian/plugins/highlight-to-canvas/highlights-import.json";
 async function repairHighlightIndex(index, exists) {
   const kept = [];
   const removed = [];
@@ -4336,8 +4336,8 @@ async function importIndex(adapter) {
 // src/commands.ts
 function registerPluginCommands(plugin) {
   plugin.addCommand({
-    id: "open-pdf-highlight-reader",
-    name: "Open current PDF in PDF Highlight Reader",
+    id: "open-highlight-to-canvas-reader",
+    name: "Open current PDF in Highlight to Canvas",
     checkCallback: (checking) => {
       const file = plugin.app.workspace.getActiveFile();
       const canRun = file instanceof import_obsidian.TFile && file.extension === "pdf";
@@ -26404,7 +26404,7 @@ var HighlightPopover = class {
     this.createButton = null;
     this.openCanvasButton = null;
     this.root = document.createElement("div");
-    this.root.className = "pdf-highlight-canvas-popover";
+    this.root.className = "highlight-to-canvas-popover";
     this.root.setAttribute("role", "dialog");
     this.root.setAttribute("aria-label", "Create Canvas node from PDF highlight");
     this.root.style.left = `${input.position.left}px`;
@@ -26413,24 +26413,24 @@ var HighlightPopover = class {
   }
   show() {
     const header = document.createElement("div");
-    header.className = "pdf-highlight-canvas-popover-header";
+    header.className = "highlight-to-canvas-popover-header";
     const title = document.createElement("div");
-    title.className = "pdf-highlight-canvas-popover-title";
+    title.className = "highlight-to-canvas-popover-title";
     title.textContent = "Create highlight node";
     const policy = document.createElement("div");
-    policy.className = "pdf-highlight-canvas-popover-policy";
+    policy.className = "highlight-to-canvas-popover-policy";
     policy.textContent = "Writes a real highlight annotation to the original PDF.";
     header.append(title, policy);
     const preview = document.createElement("div");
-    preview.className = "pdf-highlight-canvas-popover-preview";
+    preview.className = "highlight-to-canvas-popover-preview";
     preview.textContent = this.input.selectedText;
     const categoryLabel = document.createElement("label");
-    categoryLabel.className = "pdf-highlight-canvas-field-label";
+    categoryLabel.className = "highlight-to-canvas-field-label";
     categoryLabel.textContent = "Category";
     const select = document.createElement("select");
     select.setAttribute("aria-label", "Highlight category");
     const swatch = document.createElement("span");
-    swatch.className = "pdf-highlight-canvas-category-swatch";
+    swatch.className = "highlight-to-canvas-category-swatch";
     for (const category of this.input.categories) {
       const option = document.createElement("option");
       option.value = category.id;
@@ -26445,10 +26445,10 @@ var HighlightPopover = class {
     select.addEventListener("change", updateSwatch);
     updateSwatch();
     const categoryRow = document.createElement("div");
-    categoryRow.className = "pdf-highlight-canvas-category-row";
+    categoryRow.className = "highlight-to-canvas-category-row";
     categoryRow.append(swatch, select);
     const targetLabel = document.createElement("label");
-    targetLabel.className = "pdf-highlight-canvas-field-label";
+    targetLabel.className = "highlight-to-canvas-field-label";
     targetLabel.textContent = "Target Canvas";
     const targetSelect = document.createElement("select");
     targetSelect.setAttribute("aria-label", "Target Canvas");
@@ -26492,7 +26492,7 @@ var HighlightPopover = class {
       if (this.state.canvasPath) void this.input.onOpenCanvas(this.state.canvasPath);
     });
     this.statusEl = document.createElement("div");
-    this.statusEl.className = "pdf-highlight-canvas-popover-status";
+    this.statusEl.className = "highlight-to-canvas-popover-status";
     this.statusEl.textContent = "Ready";
     this.root.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
@@ -42149,7 +42149,7 @@ async function writeHighlightAnnotation(pdfBytes, input) {
     QuadPoints: quadPoints,
     C: color,
     Contents: PDFHexString_default.fromText(input.selectedText),
-    T: PDFString_default.of("PDF Highlight Canvas"),
+    T: PDFString_default.of("Highlight to Canvas"),
     F: 4
   });
   const annotationRef = context.register(annotation);
@@ -42217,13 +42217,13 @@ var ReaderToolbar = class {
     this.zoomEl = document.createElement("span");
     this.targetEl = document.createElement("span");
     this.statusEl = document.createElement("span");
-    this.root.className = "pdf-highlight-canvas-toolbar";
-    this.fileNameEl.className = "pdf-highlight-canvas-toolbar-title";
+    this.root.className = "highlight-to-canvas-toolbar";
+    this.fileNameEl.className = "highlight-to-canvas-toolbar-title";
     const meta = document.createElement("div");
-    meta.className = "pdf-highlight-canvas-toolbar-meta";
+    meta.className = "highlight-to-canvas-toolbar-meta";
     meta.append(this.pageEl, this.zoomEl, this.targetEl, this.statusEl);
     const actions = document.createElement("div");
-    actions.className = "pdf-highlight-canvas-toolbar-actions";
+    actions.className = "highlight-to-canvas-toolbar-actions";
     actions.append(
       this.button("Fit", "Fit width", () => this.input.onFitWidth()),
       this.button("-", "Zoom out", () => this.input.onZoomOut()),
@@ -42248,7 +42248,7 @@ var ReaderToolbar = class {
   button(text, label, onClick) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "pdf-highlight-canvas-toolbar-button";
+    button.className = "highlight-to-canvas-toolbar-button";
     button.textContent = text;
     button.setAttribute("aria-label", label);
     button.addEventListener("click", onClick);
@@ -42266,7 +42266,7 @@ function statusText(status) {
 }
 
 // src/pdf/pdfReaderView.ts
-var PDF_READER_VIEW_TYPE = "pdf-highlight-canvas-reader";
+var PDF_READER_VIEW_TYPE = "highlight-to-canvas-reader";
 var PdfReaderView = class extends import_obsidian3.FileView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -42306,11 +42306,11 @@ var PdfReaderView = class extends import_obsidian3.FileView {
   }
   async onOpen() {
     this.containerEl.empty();
-    this.containerEl.addClass("pdf-highlight-canvas-reader");
+    this.containerEl.addClass("highlight-to-canvas-reader");
     this.toolbar = new ReaderToolbar(this.toolbarInput());
     this.containerEl.appendChild(this.toolbar.element);
-    this.statePanel = this.containerEl.createDiv({ cls: "pdf-highlight-canvas-state-panel" });
-    this.pageContainer = this.containerEl.createDiv({ cls: "pdf-highlight-canvas-pages" });
+    this.statePanel = this.containerEl.createDiv({ cls: "highlight-to-canvas-state-panel" });
+    this.pageContainer = this.containerEl.createDiv({ cls: "highlight-to-canvas-pages" });
   }
   async onClose() {
     if (this.selectionListener && this.pageContainer) {
@@ -42326,7 +42326,7 @@ var PdfReaderView = class extends import_obsidian3.FileView {
     if (!page) return;
     page.container.scrollIntoView({ block: "center" });
     for (const rect of rects) {
-      const overlay = page.container.createDiv({ cls: "pdf-highlight-canvas-emphasis" });
+      const overlay = page.container.createDiv({ cls: "highlight-to-canvas-emphasis" });
       overlay.style.left = `${rect.x}px`;
       overlay.style.top = `${rect.y}px`;
       overlay.style.width = `${rect.width}px`;
@@ -42352,12 +42352,12 @@ var PdfReaderView = class extends import_obsidian3.FileView {
       for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
         const page = await pdf.getPage(pageNumber);
         const viewport = page.getViewport({ scale: this.zoomScale });
-        const pageEl = this.pageContainer.createDiv({ cls: "pdf-highlight-canvas-page" });
+        const pageEl = this.pageContainer.createDiv({ cls: "highlight-to-canvas-page" });
         pageEl.dataset.pageNumber = String(pageNumber);
         pageEl.style.width = `${viewport.width}px`;
         pageEl.style.height = `${viewport.height}px`;
         pageEl.createDiv({
-          cls: "pdf-highlight-canvas-page-marker",
+          cls: "highlight-to-canvas-page-marker",
           text: `Page ${pageNumber}`
         });
         const canvas = pageEl.createEl("canvas");
@@ -42366,7 +42366,7 @@ var PdfReaderView = class extends import_obsidian3.FileView {
         const context = canvas.getContext("2d");
         if (!context) throw new Error("Could not create PDF canvas context");
         await page.render({ canvasContext: context, viewport }).promise;
-        const textLayer = pageEl.createDiv({ cls: "pdf-highlight-canvas-text-layer" });
+        const textLayer = pageEl.createDiv({ cls: "highlight-to-canvas-text-layer" });
         const textContent = await page.getTextContent();
         let hasText = false;
         for (const item of textContent.items) {
@@ -42388,7 +42388,7 @@ var PdfReaderView = class extends import_obsidian3.FileView {
         if (hasText) textLayerPages += 1;
         if (!hasText) {
           textLayer.createDiv({
-            cls: "pdf-highlight-canvas-no-text",
+            cls: "highlight-to-canvas-no-text",
             text: "This PDF does not expose selectable text."
           });
         }
@@ -42439,8 +42439,8 @@ var PdfReaderView = class extends import_obsidian3.FileView {
     const range2 = selection.getRangeAt(0);
     const startElement = range2.startContainer instanceof Element ? range2.startContainer : range2.startContainer.parentElement;
     const endElement = range2.endContainer instanceof Element ? range2.endContainer : range2.endContainer.parentElement;
-    const pageEl = startElement?.closest(".pdf-highlight-canvas-page");
-    const endPageEl = endElement?.closest(".pdf-highlight-canvas-page");
+    const pageEl = startElement?.closest(".highlight-to-canvas-page");
+    const endPageEl = endElement?.closest(".highlight-to-canvas-page");
     const pageNumber = Number(pageEl?.dataset.pageNumber);
     const page = this.pages.get(pageNumber);
     if (!page || !pageEl || pageEl !== endPageEl) {
@@ -42599,8 +42599,8 @@ var PdfReaderView = class extends import_obsidian3.FileView {
     if (!this.statePanel) return;
     this.statePanel.hidden = false;
     this.statePanel.empty();
-    this.statePanel.createDiv({ cls: "pdf-highlight-canvas-state-title", text: title });
-    this.statePanel.createDiv({ cls: "pdf-highlight-canvas-state-detail", text: detail });
+    this.statePanel.createDiv({ cls: "highlight-to-canvas-state-title", text: title });
+    this.statePanel.createDiv({ cls: "highlight-to-canvas-state-detail", text: detail });
   }
   hideState() {
     if (!this.statePanel) return;

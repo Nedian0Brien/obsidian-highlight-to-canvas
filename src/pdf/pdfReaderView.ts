@@ -13,7 +13,7 @@ import { getPopoverPosition } from "./popoverPosition";
 import { writeHighlightAnnotation } from "./pdfAnnotationWriter";
 import { ReaderToolbar } from "./readerToolbar";
 
-export const PDF_READER_VIEW_TYPE = "pdf-highlight-canvas-reader";
+export const PDF_READER_VIEW_TYPE = "highlight-to-canvas-reader";
 
 interface RenderedPage {
   pageNumber: number;
@@ -73,11 +73,11 @@ export class PdfReaderView extends FileView {
 
   async onOpen(): Promise<void> {
     this.containerEl.empty();
-    this.containerEl.addClass("pdf-highlight-canvas-reader");
+    this.containerEl.addClass("highlight-to-canvas-reader");
     this.toolbar = new ReaderToolbar(this.toolbarInput());
     this.containerEl.appendChild(this.toolbar.element);
-    this.statePanel = this.containerEl.createDiv({ cls: "pdf-highlight-canvas-state-panel" });
-    this.pageContainer = this.containerEl.createDiv({ cls: "pdf-highlight-canvas-pages" });
+    this.statePanel = this.containerEl.createDiv({ cls: "highlight-to-canvas-state-panel" });
+    this.pageContainer = this.containerEl.createDiv({ cls: "highlight-to-canvas-pages" });
   }
 
   async onClose(): Promise<void> {
@@ -96,7 +96,7 @@ export class PdfReaderView extends FileView {
     page.container.scrollIntoView({ block: "center" });
 
     for (const rect of rects) {
-      const overlay = page.container.createDiv({ cls: "pdf-highlight-canvas-emphasis" });
+      const overlay = page.container.createDiv({ cls: "highlight-to-canvas-emphasis" });
       overlay.style.left = `${rect.x}px`;
       overlay.style.top = `${rect.y}px`;
       overlay.style.width = `${rect.width}px`;
@@ -125,13 +125,13 @@ export class PdfReaderView extends FileView {
       for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
         const page = await pdf.getPage(pageNumber);
         const viewport = page.getViewport({ scale: this.zoomScale });
-        const pageEl = this.pageContainer.createDiv({ cls: "pdf-highlight-canvas-page" });
+        const pageEl = this.pageContainer.createDiv({ cls: "highlight-to-canvas-page" });
         pageEl.dataset.pageNumber = String(pageNumber);
         pageEl.style.width = `${viewport.width}px`;
         pageEl.style.height = `${viewport.height}px`;
 
         pageEl.createDiv({
-          cls: "pdf-highlight-canvas-page-marker",
+          cls: "highlight-to-canvas-page-marker",
           text: `Page ${pageNumber}`
         });
 
@@ -142,7 +142,7 @@ export class PdfReaderView extends FileView {
         if (!context) throw new Error("Could not create PDF canvas context");
         await page.render({ canvasContext: context, viewport }).promise;
 
-        const textLayer = pageEl.createDiv({ cls: "pdf-highlight-canvas-text-layer" });
+        const textLayer = pageEl.createDiv({ cls: "highlight-to-canvas-text-layer" });
         const textContent = await page.getTextContent();
         let hasText = false;
         for (const item of textContent.items) {
@@ -165,7 +165,7 @@ export class PdfReaderView extends FileView {
         if (hasText) textLayerPages += 1;
         if (!hasText) {
           textLayer.createDiv({
-            cls: "pdf-highlight-canvas-no-text",
+            cls: "highlight-to-canvas-no-text",
             text: "This PDF does not expose selectable text."
           });
         }
@@ -221,8 +221,8 @@ export class PdfReaderView extends FileView {
     const range = selection.getRangeAt(0);
     const startElement = range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
     const endElement = range.endContainer instanceof Element ? range.endContainer : range.endContainer.parentElement;
-    const pageEl = startElement?.closest<HTMLElement>(".pdf-highlight-canvas-page");
-    const endPageEl = endElement?.closest<HTMLElement>(".pdf-highlight-canvas-page");
+    const pageEl = startElement?.closest<HTMLElement>(".highlight-to-canvas-page");
+    const endPageEl = endElement?.closest<HTMLElement>(".highlight-to-canvas-page");
     const pageNumber = Number(pageEl?.dataset.pageNumber);
     const page = this.pages.get(pageNumber);
     if (!page || !pageEl || pageEl !== endPageEl) {
@@ -395,8 +395,8 @@ export class PdfReaderView extends FileView {
     if (!this.statePanel) return;
     this.statePanel.hidden = false;
     this.statePanel.empty();
-    this.statePanel.createDiv({ cls: "pdf-highlight-canvas-state-title", text: title });
-    this.statePanel.createDiv({ cls: "pdf-highlight-canvas-state-detail", text: detail });
+    this.statePanel.createDiv({ cls: "highlight-to-canvas-state-title", text: title });
+    this.statePanel.createDiv({ cls: "highlight-to-canvas-state-detail", text: detail });
   }
 
   private hideState(): void {

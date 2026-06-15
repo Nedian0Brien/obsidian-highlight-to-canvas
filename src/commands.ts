@@ -6,8 +6,8 @@ import { exportIndex, importIndex, repairHighlightIndex } from "./obsidian/index
 
 export function registerPluginCommands(plugin: PdfHighlightCanvasPlugin): void {
   plugin.addCommand({
-    id: "open-pdf-highlight-reader",
-    name: "Open current PDF in PDF Highlight Reader",
+    id: "open-highlight-to-canvas-reader",
+    name: "Open current PDF in Highlight to Canvas",
     checkCallback: (checking) => {
       const file = plugin.app.workspace.getActiveFile();
       const canRun = file instanceof TFile && file.extension === "pdf";
@@ -60,4 +60,3 @@ export function registerPluginCommands(plugin: PdfHighlightCanvasPlugin): void {
     }
   });
 }
-

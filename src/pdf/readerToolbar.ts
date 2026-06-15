@@ -21,14 +21,14 @@ export class ReaderToolbar {
   private readonly statusEl = document.createElement("span");
 
   constructor(private input: ReaderToolbarInput) {
-    this.root.className = "pdf-highlight-canvas-toolbar";
-    this.fileNameEl.className = "pdf-highlight-canvas-toolbar-title";
+    this.root.className = "highlight-to-canvas-toolbar";
+    this.fileNameEl.className = "highlight-to-canvas-toolbar-title";
     const meta = document.createElement("div");
-    meta.className = "pdf-highlight-canvas-toolbar-meta";
+    meta.className = "highlight-to-canvas-toolbar-meta";
     meta.append(this.pageEl, this.zoomEl, this.targetEl, this.statusEl);
 
     const actions = document.createElement("div");
-    actions.className = "pdf-highlight-canvas-toolbar-actions";
+    actions.className = "highlight-to-canvas-toolbar-actions";
     actions.append(
       this.button("Fit", "Fit width", () => this.input.onFitWidth()),
       this.button("-", "Zoom out", () => this.input.onZoomOut()),
@@ -57,7 +57,7 @@ export class ReaderToolbar {
   private button(text: string, label: string, onClick: () => void): HTMLButtonElement {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "pdf-highlight-canvas-toolbar-button";
+    button.className = "highlight-to-canvas-toolbar-button";
     button.textContent = text;
     button.setAttribute("aria-label", label);
     button.addEventListener("click", onClick);

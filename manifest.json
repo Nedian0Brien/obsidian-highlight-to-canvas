@@ -1,9 +1,9 @@
 {
-  "id": "pdf-highlight-canvas",
-  "name": "PDF Highlight Canvas",
+  "id": "highlight-to-canvas",
+  "name": "Highlight to Canvas",
   "version": "0.1.0",
   "minAppVersion": "1.5.0",
-  "description": "Create Canvas text nodes from live PDF highlights.",
+  "description": "Turn PDF highlights into connected Obsidian Canvas nodes.",
   "author": "Minjae Park",
   "authorUrl": "",
   "isDesktopOnly": false

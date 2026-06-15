@@ -2,7 +2,7 @@ import type { DataAdapter } from "obsidian";
 import { addHighlightRecord, createEmptyHighlightIndex, exportHighlightIndex, importHighlightIndex } from "../index/highlightIndex";
 import type { HighlightRecord } from "../types";
 
-export const INDEX_PATH = ".obsidian/plugins/pdf-highlight-canvas/highlights.json";
+export const INDEX_PATH = ".obsidian/plugins/highlight-to-canvas/highlights.json";
 
 export async function readIndex(adapter: DataAdapter) {
   if (!(await adapter.exists(INDEX_PATH))) {
@@ -16,4 +16,3 @@ export async function saveRecord(adapter: DataAdapter, record: HighlightRecord):
   const next = addHighlightRecord(current, record);
   await adapter.write(INDEX_PATH, exportHighlightIndex(next));
 }
-
