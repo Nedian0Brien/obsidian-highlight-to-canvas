@@ -18,14 +18,17 @@
 ## PDF Reader
 
 1. Open a Vault PDF that has selectable text.
-2. Run `Open current PDF in PDF Highlight Reader`.
-3. Confirm the plugin reader renders pages.
-4. Confirm the reader toolbar shows file name, page progress, zoom controls, target Canvas, and status.
-5. Use fit width, zoom out, zoom in, and reset zoom.
-6. Confirm page markers remain visible enough to orient long PDF scrolling.
-7. Select text on one page.
-8. Confirm the creation popover appears near the selected text and stays within the pane.
-9. Press Escape and confirm the popover closes.
+2. Confirm a normal click may open Obsidian's built-in PDF viewer.
+3. Use one of the plugin entry points:
+   - Run `Open current PDF in Highlight to Canvas` from the command palette while the PDF is active.
+   - Or right-click/long-press the PDF in the file explorer and choose `Open in Highlight to Canvas`.
+4. Confirm the plugin reader renders pages.
+5. Confirm the reader toolbar shows file name, page progress, zoom controls, target Canvas, and status.
+6. Use fit width, zoom out, zoom in, and reset zoom.
+7. Confirm page markers remain visible enough to orient long PDF scrolling.
+8. Select text on one page with mouse or touch selection.
+9. Confirm the creation popover appears near the selected text and stays within the pane.
+10. Press Escape and confirm the popover closes.
 
 ## Highlight to Canvas
 

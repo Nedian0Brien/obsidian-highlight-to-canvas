@@ -1,5 +1,6 @@
 import { Plugin, TFile } from "obsidian";
 import { registerPluginCommands } from "./commands";
+import { addPdfFileMenuEntry } from "./obsidian/pdfEntryPoints";
 import { PdfReaderView, PDF_READER_VIEW_TYPE } from "./pdf/pdfReaderView";
 import { DEFAULT_SETTINGS, normalizeSettings, PdfHighlightCanvasSettingTab } from "./settings";
 import type { PdfHighlightCanvasSettings } from "./types";
@@ -15,6 +16,13 @@ export default class PdfHighlightCanvasPlugin extends Plugin {
     }
     this.addSettingTab(new PdfHighlightCanvasSettingTab(this.app, this));
     registerPluginCommands(this);
+    this.registerEvent(
+      this.app.workspace.on("file-menu", (menu, file) => {
+        addPdfFileMenuEntry(menu, file, (pdfFile) => {
+          void this.openPdfReader(pdfFile);
+        });
+      })
+    );
   }
 
   async loadSettings(): Promise<void> {
@@ -34,4 +42,3 @@ export default class PdfHighlightCanvasPlugin extends Plugin {
     }
   }
 }
-

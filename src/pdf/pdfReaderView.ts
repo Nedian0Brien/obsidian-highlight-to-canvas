@@ -1,5 +1,4 @@
 import { FileView, Notice, TFile, WorkspaceLeaf } from "obsidian";
-import * as pdfjsLib from "pdfjs-dist";
 import { buildCanvasTargetOptions, rememberCanvasTarget } from "../canvas/canvasTarget";
 import { createHighlightFlow } from "../highlights/createHighlightFlow";
 import type PdfHighlightCanvasPlugin from "../main";
@@ -9,9 +8,11 @@ import type { SaveStatus } from "../types";
 import { toFriendlyErrorMessage } from "../ui/errorMessages";
 import { buildCapturedHighlight, normalizeSelectionRects } from "./highlightCapture";
 import { HighlightPopover } from "./highlightPopover";
+import { loadPdfJs } from "./pdfJs";
 import { getPopoverPosition } from "./popoverPosition";
 import { writeHighlightAnnotation } from "./pdfAnnotationWriter";
 import { ReaderToolbar } from "./readerToolbar";
+import { HIGHLIGHT_TO_CANVAS_SELECTION_EVENTS } from "./selectionEvents";
 
 export const PDF_READER_VIEW_TYPE = "highlight-to-canvas-reader";
 
@@ -82,7 +83,7 @@ export class PdfReaderView extends FileView {
 
   async onClose(): Promise<void> {
     if (this.selectionListener && this.pageContainer) {
-      this.pageContainer.removeEventListener("mouseup", this.selectionListener);
+      this.unregisterSelectionListeners();
     }
     if (this.scrollListener && this.pageContainer) {
       this.pageContainer.removeEventListener("scroll", this.scrollListener);
@@ -116,6 +117,7 @@ export class PdfReaderView extends FileView {
     this.activePage = 1;
 
     try {
+      const pdfjsLib = await loadPdfJs();
       const bytes = await this.app.vault.readBinary(this.currentFile);
       const documentTask = pdfjsLib.getDocument({ data: bytes });
       const pdf = await documentTask.promise;
@@ -200,11 +202,9 @@ export class PdfReaderView extends FileView {
       return;
     }
 
-    if (this.selectionListener) {
-      this.pageContainer.removeEventListener("mouseup", this.selectionListener);
-    }
+    this.unregisterSelectionListeners();
     this.selectionListener = () => this.handleSelection();
-    this.pageContainer.addEventListener("mouseup", this.selectionListener);
+    this.registerSelectionListeners();
     if (this.scrollListener) {
       this.pageContainer.removeEventListener("scroll", this.scrollListener);
     }
@@ -360,6 +360,20 @@ export class PdfReaderView extends FileView {
         }
       }
     }).show();
+  }
+
+  private registerSelectionListeners(): void {
+    if (!this.pageContainer || !this.selectionListener) return;
+    for (const eventName of HIGHLIGHT_TO_CANVAS_SELECTION_EVENTS) {
+      this.pageContainer.addEventListener(eventName, this.selectionListener);
+    }
+  }
+
+  private unregisterSelectionListeners(): void {
+    if (!this.pageContainer || !this.selectionListener) return;
+    for (const eventName of HIGHLIGHT_TO_CANVAS_SELECTION_EVENTS) {
+      this.pageContainer.removeEventListener(eventName, this.selectionListener);
+    }
   }
 
   private toolbarInput() {

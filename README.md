@@ -25,6 +25,15 @@ Highlight to Canvas lets you read a PDF inside Obsidian, select text, save the h
 
 4. Enable `Highlight to Canvas` from Obsidian's Community plugins list.
 
+## Opening PDFs
+
+Opening a PDF with a normal click may still show Obsidian's built-in PDF viewer. To use Highlight to Canvas, open the PDF through one of the plugin entry points:
+
+- Command palette: `Open current PDF in Highlight to Canvas`
+- File explorer menu: right-click or long-press a PDF and choose `Open in Highlight to Canvas`
+
+The highlight popover only appears inside the Highlight to Canvas reader.
+
 ## Manual Install
 
 1. Download `main.js`, `manifest.json`, and `styles.css` from the latest GitHub release.
@@ -50,9 +59,9 @@ npm run build
 Push a tag matching the version in `manifest.json`:
 
 ```bash
-git tag v0.1.0
+git tag v0.1.1
 git push origin main
-git push origin v0.1.0
+git push origin v0.1.1
 ```
 
 The release workflow uploads `main.js`, `manifest.json`, `styles.css`, and a zip package for BRAT/manual installation.
