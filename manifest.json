@@ -6,6 +6,5 @@
   "description": "Create Canvas text nodes from live PDF highlights.",
   "author": "Minjae Park",
   "authorUrl": "",
-  "isDesktopOnly": true
+  "isDesktopOnly": false
 }
-

@@ -19,7 +19,7 @@ describe("pdfAnnotationWriter", () => {
     const page = updated.getPage(0);
     const annots = page.node.lookup(PDFName.of("Annots"));
 
-    expect(result.annotationFingerprint.startsWith("sha256:")).toBe(true);
+    expect(result.annotationFingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(annots).toBeTruthy();
   });
 
@@ -38,4 +38,3 @@ describe("pdfAnnotationWriter", () => {
     ).rejects.toThrow("PDF page 2 does not exist");
   });
 });
-

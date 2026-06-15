@@ -26558,9 +26558,6 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-// src/pdf/pdfAnnotationWriter.ts
-var import_crypto = require("crypto");
-
 // node_modules/pdf-lib/node_modules/tslib/tslib.es6.js
 var extendStatics = function(d, b) {
   extendStatics = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(d2, b2) {
@@ -41949,6 +41946,187 @@ var PDFButton = (
 );
 var PDFButton_default = PDFButton;
 
+// src/utils/hash.ts
+async function createStableFingerprint(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await sha256(bytes);
+  return `sha256:${toHex(digest)}`;
+}
+async function sha256(bytes) {
+  const subtle = globalThis.crypto?.subtle;
+  if (subtle) {
+    const digest = await subtle.digest("SHA-256", toArrayBuffer(bytes));
+    return new Uint8Array(digest);
+  }
+  return sha256Fallback(bytes);
+}
+function sha256Fallback(message) {
+  const words = bytesToWords(padMessage(message));
+  const hash = [
+    1779033703,
+    3144134277,
+    1013904242,
+    2773480762,
+    1359893119,
+    2600822924,
+    528734635,
+    1541459225
+  ];
+  const schedule = new Array(64);
+  for (let offset = 0; offset < words.length; offset += 16) {
+    for (let i = 0; i < 16; i += 1) schedule[i] = words[offset + i];
+    for (let i = 16; i < 64; i += 1) {
+      schedule[i] = add(smallSigma1(schedule[i - 2]), schedule[i - 7], smallSigma0(schedule[i - 15]), schedule[i - 16]);
+    }
+    let [a, b, c, d, e, f, g, h] = hash;
+    for (let i = 0; i < 64; i += 1) {
+      const t1 = add(h, bigSigma1(e), choose(e, f, g), SHA256_K[i], schedule[i]);
+      const t2 = add(bigSigma0(a), majority(a, b, c));
+      h = g;
+      g = f;
+      f = e;
+      e = add(d, t1);
+      d = c;
+      c = b;
+      b = a;
+      a = add(t1, t2);
+    }
+    hash[0] = add(hash[0], a);
+    hash[1] = add(hash[1], b);
+    hash[2] = add(hash[2], c);
+    hash[3] = add(hash[3], d);
+    hash[4] = add(hash[4], e);
+    hash[5] = add(hash[5], f);
+    hash[6] = add(hash[6], g);
+    hash[7] = add(hash[7], h);
+  }
+  const digest = new Uint8Array(32);
+  hash.forEach((word, index) => {
+    digest[index * 4] = word >>> 24;
+    digest[index * 4 + 1] = word >>> 16;
+    digest[index * 4 + 2] = word >>> 8;
+    digest[index * 4 + 3] = word;
+  });
+  return digest;
+}
+function padMessage(message) {
+  const bitLength = message.length * 8;
+  const paddedLength = Math.ceil((message.length + 9) / 64) * 64;
+  const padded = new Uint8Array(paddedLength);
+  padded.set(message);
+  padded[message.length] = 128;
+  const view = new DataView(padded.buffer);
+  view.setUint32(paddedLength - 8, Math.floor(bitLength / 4294967296));
+  view.setUint32(paddedLength - 4, bitLength >>> 0);
+  return padded;
+}
+function bytesToWords(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const words = [];
+  for (let offset = 0; offset < bytes.length; offset += 4) {
+    words.push(view.getUint32(offset));
+  }
+  return words;
+}
+function toHex(bytes) {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+function toArrayBuffer(bytes) {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+function add(...values2) {
+  return values2.reduce((sum2, value) => sum2 + value >>> 0, 0);
+}
+function rotateRight(value, shift) {
+  return value >>> shift | value << 32 - shift;
+}
+function choose(x, y, z) {
+  return x & y ^ ~x & z;
+}
+function majority(x, y, z) {
+  return x & y ^ x & z ^ y & z;
+}
+function bigSigma0(x) {
+  return rotateRight(x, 2) ^ rotateRight(x, 13) ^ rotateRight(x, 22);
+}
+function bigSigma1(x) {
+  return rotateRight(x, 6) ^ rotateRight(x, 11) ^ rotateRight(x, 25);
+}
+function smallSigma0(x) {
+  return rotateRight(x, 7) ^ rotateRight(x, 18) ^ x >>> 3;
+}
+function smallSigma1(x) {
+  return rotateRight(x, 17) ^ rotateRight(x, 19) ^ x >>> 10;
+}
+var SHA256_K = [
+  1116352408,
+  1899447441,
+  3049323471,
+  3921009573,
+  961987163,
+  1508970993,
+  2453635748,
+  2870763221,
+  3624381080,
+  310598401,
+  607225278,
+  1426881987,
+  1925078388,
+  2162078206,
+  2614888103,
+  3248222580,
+  3835390401,
+  4022224774,
+  264347078,
+  604807628,
+  770255983,
+  1249150122,
+  1555081692,
+  1996064986,
+  2554220882,
+  2821834349,
+  2952996808,
+  3210313671,
+  3336571891,
+  3584528711,
+  113926993,
+  338241895,
+  666307205,
+  773529912,
+  1294757372,
+  1396182291,
+  1695183700,
+  1986661051,
+  2177026350,
+  2456956037,
+  2730485921,
+  2820302411,
+  3259730800,
+  3345764771,
+  3516065817,
+  3600352804,
+  4094571909,
+  275423344,
+  430227734,
+  506948616,
+  659060556,
+  883997877,
+  958139571,
+  1322822218,
+  1537002063,
+  1747873779,
+  1955562222,
+  2024104815,
+  2227730452,
+  2361852424,
+  2428436474,
+  2756734187,
+  3204031479,
+  3329325298
+];
+
 // src/pdf/pdfAnnotationWriter.ts
 async function writeHighlightAnnotation(pdfBytes, input) {
   const pdfDoc = await PDFDocument_default.load(pdfBytes);
@@ -41987,7 +42165,7 @@ async function writeHighlightAnnotation(pdfBytes, input) {
   const bytes = await pdfDoc.save();
   return {
     bytes,
-    annotationFingerprint: createAnnotationFingerprint(input)
+    annotationFingerprint: await createAnnotationFingerprint(input)
   };
 }
 function unionRects(rects) {
@@ -42020,15 +42198,13 @@ function parseHexColor(hex) {
     Number.parseInt(normalized.slice(4, 6), 16) / 255
   ];
 }
-function createAnnotationFingerprint(input) {
-  const hash = (0, import_crypto.createHash)("sha256");
-  hash.update(JSON.stringify({
+async function createAnnotationFingerprint(input) {
+  return createStableFingerprint(JSON.stringify({
     pageNumber: input.pageNumber,
     selectedText: input.selectedText,
     pdfRects: input.pdfRects,
     color: input.color
   }));
-  return `sha256:${hash.digest("hex")}`;
 }
 
 // src/pdf/readerToolbar.ts

@@ -1,4 +1,3 @@
-import { createHash } from "crypto";
 import {
   PDFArray,
   PDFDict,
@@ -9,6 +8,7 @@ import {
   PDFString
 } from "pdf-lib";
 import type { Rect } from "../types";
+import { createStableFingerprint } from "../utils/hash";
 
 export interface WriteHighlightAnnotationInput {
   pageNumber: number;
@@ -66,7 +66,7 @@ export async function writeHighlightAnnotation(
   const bytes = await pdfDoc.save();
   return {
     bytes,
-    annotationFingerprint: createAnnotationFingerprint(input)
+    annotationFingerprint: await createAnnotationFingerprint(input)
   };
 }
 
@@ -103,14 +103,11 @@ function parseHexColor(hex: string): number[] {
   ];
 }
 
-function createAnnotationFingerprint(input: WriteHighlightAnnotationInput): string {
-  const hash = createHash("sha256");
-  hash.update(JSON.stringify({
+async function createAnnotationFingerprint(input: WriteHighlightAnnotationInput): Promise<string> {
+  return createStableFingerprint(JSON.stringify({
     pageNumber: input.pageNumber,
     selectedText: input.selectedText,
     pdfRects: input.pdfRects,
     color: input.color
   }));
-  return `sha256:${hash.digest("hex")}`;
 }
-

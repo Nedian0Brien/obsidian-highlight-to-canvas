@@ -6,6 +6,15 @@
 2. Copy `main.js`, `manifest.json`, and `styles.css` into a test Vault at `.obsidian/plugins/pdf-highlight-canvas/`.
 3. Enable the plugin in Obsidian community plugin settings.
 
+## Mobile Install
+
+1. Build with `npm run build`.
+2. Sync or copy `main.js`, `manifest.json`, and `styles.css` into the mobile test Vault at `.obsidian/plugins/pdf-highlight-canvas/`.
+3. Open Obsidian on iOS or Android.
+4. Confirm the plugin appears in Community plugins and can be enabled.
+5. Open a selectable-text PDF and run a smoke test: render PDF, select text, create a Canvas node, and confirm the target Canvas file updates.
+6. If PDF rendering, text selection, or binary PDF saving fails on mobile, record the device, OS, Obsidian version, PDF file type, and the exact step that failed.
+
 ## PDF Reader
 
 1. Open a Vault PDF that has selectable text.
